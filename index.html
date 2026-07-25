@@ -10,8 +10,8 @@
   body{background:#080B12;color:#E8EDF5;font-family:'Inter',sans-serif;min-height:100vh}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
   @keyframes bounce{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-6px)}}
-  ::-webkit-scrollbar{width:3px}
-  ::-webkit-scrollbar-thumb{background:#1A2035;border-radius:2px}
+  @keyframes progress-anim{from{background-position:40px 0}to{background-position:0 0}}
+  ::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:#1A2035;border-radius:2px}
   .wrap{max-width:480px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column}
   .header{position:sticky;top:0;z-index:10;background:rgba(8,11,18,.95);backdrop-filter:blur(14px);border-bottom:1px solid #1A2035;padding:13px 16px;display:flex;align-items:center;gap:12px}
   .chat{flex:1;overflow-y:auto;padding:12px 16px 16px}
@@ -24,6 +24,20 @@
   .msg.user .bubble{background:#00E5CC;color:#080B12;border:none;font-weight:600;border-radius:16px 16px 4px 16px}
   .time{font-size:10px;color:#4A5568;margin-top:3px}
   .msg.user .time{text-align:right}
+
+  /* Progress Section */
+  .progress-section{margin:12px 16px;background:#0F1420;border:1px solid #1A2035;border-radius:12px;padding:14px;display:none}
+  .progress-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+  .progress-title{font-size:11px;font-weight:700;color:#00E5CC;letter-spacing:1px}
+  .posted-count{font-size:11px;color:#4A5568;font-family:monospace}
+  .progress-bar-wrap{height:8px;background:#1A2035;border-radius:4px;overflow:hidden;margin-bottom:8px}
+  .progress-bar{height:100%;background:#00E5CC;border-radius:4px;transition:width .5s ease;width:0%;
+    background-image:linear-gradient(45deg,rgba(255,255,255,.1) 25%,transparent 25%,transparent 50%,rgba(255,255,255,.1) 50%,rgba(255,255,255,.1) 75%,transparent 75%,transparent);
+    background-size:40px 40px;animation:progress-anim 1s linear infinite}
+  .progress-text{font-size:12px;color:#6B7280}
+  .run-btn{width:100%;padding:10px;background:#00E5CC22;border:1px solid #00E5CC44;border-radius:8px;color:#00E5CC;font-weight:700;font-size:13px;cursor:pointer;margin-top:10px;font-family:'Inter',sans-serif}
+  .run-btn:hover{background:#00E5CC33}
+
   .confirm{margin:0 16px 12px;background:#0F1420;border:1px solid #00E5CC44;border-radius:14px;padding:16px;display:none}
   .active-bar{margin:10px 16px 4px;background:rgba(0,229,204,.08);border:1px solid rgba(0,229,204,.2);border-radius:12px;padding:11px 14px;display:none;align-items:center;gap:10px}
   .dot{width:7px;height:7px;border-radius:50%;background:#22C55E;box-shadow:0 0 8px #22C55E;animation:pulse 2s infinite;flex-shrink:0}
@@ -35,18 +49,17 @@
   textarea{flex:1;resize:none;max-height:90px;background:#0F1420;border:1px solid #1A2035;border-radius:12px;padding:11px 14px;color:#E8EDF5;font-size:14px;outline:none;line-height:1.4;font-family:'Inter',sans-serif}
   .send{width:44px;height:44px;border-radius:12px;background:#1A2035;border:none;color:#4A5568;font-size:18px;cursor:not-allowed;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s}
   .send.on{background:#00E5CC;color:#080B12;cursor:pointer}
-  .btn-primary{flex:1;padding:13px;background:#00E5CC;color:#080B12;border:none;border-radius:10px;font-weight:800;font-size:14px;cursor:pointer;font-family:'Inter',sans-serif}
-  .btn-sec{padding:13px 16px;background:#1A2035;color:#E8EDF5;border:none;border-radius:10px;font-weight:600;font-size:14px;cursor:pointer;font-family:'Inter',sans-serif}
-  .typing{display:flex;gap:5px;padding:14px 18px}
-  .typing span{width:7px;height:7px;border-radius:50%;background:#4A5568;display:inline-block}
-  .typing span:nth-child(1){animation:bounce .8s 0s infinite}
-  .typing span:nth-child(2){animation:bounce .8s .15s infinite}
-  .typing span:nth-child(3){animation:bounce .8s .3s infinite}
+  .btn-p{flex:1;padding:13px;background:#00E5CC;color:#080B12;border:none;border-radius:10px;font-weight:800;font-size:14px;cursor:pointer;font-family:'Inter',sans-serif}
+  .btn-s{padding:13px 16px;background:#1A2035;color:#E8EDF5;border:none;border-radius:10px;font-weight:600;font-size:14px;cursor:pointer;font-family:'Inter',sans-serif}
+  .typing-dots{display:flex;gap:5px;padding:14px 18px}
+  .typing-dots span{width:7px;height:7px;border-radius:50%;background:#4A5568;display:inline-block}
+  .typing-dots span:nth-child(1){animation:bounce .8s 0s infinite}
+  .typing-dots span:nth-child(2){animation:bounce .8s .15s infinite}
+  .typing-dots span:nth-child(3){animation:bounce .8s .3s infinite}
 </style>
 </head>
 <body>
 <div class="wrap">
-
   <div class="header">
     <span style="font-size:24px">🎬</span>
     <div style="flex:1">
@@ -59,10 +72,23 @@
   <div class="active-bar" id="abar">
     <div class="dot"></div>
     <div style="flex:1;min-width:0">
-      <div style="font-size:10px;font-weight:700;color:#00E5CC">ACTIVE</div>
+      <div style="font-size:10px;font-weight:700;color:#00E5CC">ACTIVE TOPIC</div>
       <div id="atopic" style="font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
     </div>
     <button onclick="clearTopic()" style="background:none;border:1px solid #1A2035;border-radius:8px;padding:5px 9px;color:#4A5568;cursor:pointer;font-size:11px">Change</button>
+  </div>
+
+  <!-- PROGRESS SECTION -->
+  <div class="progress-section" id="progress-section">
+    <div class="progress-header">
+      <span class="progress-title">⚙️ PIPELINE STATUS</span>
+      <span class="posted-count" id="posted-count">0/3 aaj</span>
+    </div>
+    <div class="progress-bar-wrap">
+      <div class="progress-bar" id="progress-bar"></div>
+    </div>
+    <div class="progress-text" id="progress-text">Ready</div>
+    <button class="run-btn" onclick="runNow()">▶ Abhi Ek Video Post Karo</button>
   </div>
 
   <div class="chat" id="chat"></div>
@@ -71,16 +97,16 @@
     <div style="font-size:10px;font-weight:800;color:#00E5CC;letter-spacing:1.5px;margin-bottom:12px">✅ CONFIRM KARO</div>
     <div id="crow"></div>
     <div style="display:flex;gap:8px;margin-top:14px">
-      <button class="btn-primary" onclick="doConfirm()">🚀 START POSTING</button>
-      <button class="btn-sec" onclick="doEdit()">✏️</button>
+      <button class="btn-p" onclick="doConfirm()">🚀 START POSTING</button>
+      <button class="btn-s" onclick="doEdit()">✏️ Badlo</button>
     </div>
   </div>
 
   <div class="chips" id="chips">
     <div class="chip" onclick="send('World Cup 2026 football')">⚽ World Cup</div>
     <div class="chip" onclick="send('IPL Cricket 2026')">🏏 Cricket</div>
-    <div class="chip" onclick="send('NBA Basketball')">🏀 NBA</div>
     <div class="chip" onclick="send('Breaking News India')">📰 News</div>
+    <div class="chip" onclick="send('Bollywood latest')">🎬 Bollywood</div>
   </div>
 
   <div class="input-bar">
@@ -91,87 +117,61 @@
 </div>
 
 <script>
-const SERVER = "";  // same origin — Railway serves both
-let msgs = [];
-let busy = false;
-let pending = null;
-let active = null;
-let rec = null;
-let listening = false;
-
+let msgs=[], busy=false, pending=null, active=null, rec=null, listening=false;
 function t(){return new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});}
 
-function addMsg(role, text){
-  msgs.push({role,text,time:t()});
-  render();
-}
+function addMsg(role,text){msgs.push({role,text,time:t()});render();}
 
 function render(){
-  const c = document.getElementById("chat");
-  c.innerHTML = msgs.map(m => {
-    const u = m.role==="user";
+  const c=document.getElementById("chat");
+  c.innerHTML=msgs.map(m=>{
+    const u=m.role==="user";
     return `<div class="msg ${u?'user':'bot'}">
       <div class="avatar">${u?"👤":"🤖"}</div>
-      <div>
-        <div class="bubble">${m.text.replace(/\n/g,"<br>")}</div>
-        <div class="time">${m.time}</div>
-      </div>
-    </div>`;
+      <div><div class="bubble">${m.text.replace(/\n/g,"<br>")}</div>
+      <div class="time">${m.time}</div></div></div>`;
   }).join("");
-  c.scrollTop = c.scrollHeight;
+  c.scrollTop=c.scrollHeight;
 }
 
 function showTyping(){
-  const c = document.getElementById("chat");
-  const d = document.createElement("div");
+  const c=document.getElementById("chat");
+  const d=document.createElement("div");
   d.className="msg bot";d.id="typing";
-  d.innerHTML=`<div class="avatar">🤖</div><div class="bubble"><div class="typing"><span></span><span></span><span></span></div></div>`;
+  d.innerHTML=`<div class="avatar">🤖</div><div class="bubble"><div class="typing-dots"><span></span><span></span><span></span></div></div>`;
   c.appendChild(d);c.scrollTop=c.scrollHeight;
 }
-
 function hideTyping(){const t=document.getElementById("typing");if(t)t.remove();}
 
 async function send(text){
-  const msg = (text||document.getElementById("inp").value).trim();
+  const msg=(text||document.getElementById("inp").value).trim();
   if(!msg||busy)return;
   addMsg("user",msg);
   document.getElementById("inp").value="";
   updateSend();
   document.getElementById("chips").style.display="none";
   busy=true;showTyping();
-
   try{
-    const res = await fetch(SERVER+"/chat",{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({messages:msgs.filter(m=>m.role!=="system").map(m=>({role:m.role,content:m.text}))})
-    });
-    const data = await res.json();
+    const res=await fetch("/chat",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({messages:msgs.map(m=>({role:m.role,content:m.text}))})});
+    const data=await res.json();
     hideTyping();
     addMsg("assistant",data.reply);
     busy=false;
-
-    // Check for confirmation JSON
-    const match = data.reply.match(/```json\n([\s\S]*?)\n```/);
-    if(match){
-      try{
-        const cfg = JSON.parse(match[1]);
-        if(cfg.confirmed){pending=cfg;showConfirm(cfg);}
-      }catch{}
-    }
-  }catch(e){
-    hideTyping();
-    addMsg("assistant","❌ Server se connect nahi ho paya. Thodi der mein dobara try karo.");
-    busy=false;
-  }
+    const match=data.reply.match(/```json\n([\s\S]*?)\n```/);
+    if(match){try{const c=JSON.parse(match[1]);if(c.confirmed)showConfirm(c);}catch{}}
+  }catch(e){hideTyping();addMsg("assistant","❌ Error. Dobara try karo.");busy=false;}
 }
 
 function sendInput(){send(document.getElementById("inp").value);}
 
 function showConfirm(cfg){
-  document.getElementById("crow").innerHTML = [
-    ["Topic",cfg.topic],["Caption",cfg.caption],["Posts/Day",""+cfg.posts_per_day]
-  ].map(([k,v])=>`<div style="display:flex;justify-content:space-between;gap:12px;margin-bottom:8px"><span style="font-size:11px;color:#4A5568;text-transform:uppercase;flex-shrink:0">${k}</span><span style="font-size:13px;font-weight:600;text-align:right">${v}</span></div>`).join("");
+  pending=cfg;
+  document.getElementById("crow").innerHTML=[
+    ["Topic",cfg.topic],["Caption",cfg.caption||""],["Posts/Day",""+cfg.posts_per_day]
+  ].map(([k,v])=>`<div style="display:flex;justify-content:space-between;gap:12px;margin-bottom:8px">
+    <span style="font-size:11px;color:#4A5568;text-transform:uppercase;flex-shrink:0">${k}</span>
+    <span style="font-size:13px;font-weight:600;text-align:right">${v}</span></div>`).join("");
   document.getElementById("ccard").style.display="block";
 }
 
@@ -182,21 +182,16 @@ function doConfirm(){
   document.getElementById("atopic").textContent=active.topic;
   document.getElementById("live").style.display="block";
   document.getElementById("hsub").textContent="● "+active.topic.slice(0,28);
-  
-  // Sync to backend
-  fetch(SERVER+"/config",{
-    method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({...active,active:true})
-  });
-  
-  addMsg("assistant","✅ Active ho gaya!\n\n📌 \""+active.topic+"\"\n📅 "+active.posts_per_day+" videos/day\n\nDrive raw_videos mein videos daalo — auto post hongi! 🎯");
+  document.getElementById("progress-section").style.display="block";
+  fetch("/config",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({...active,active:true})});
+  addMsg("assistant","✅ Active ho gaya!\n\n📌 \""+active.topic+"\"\n📅 "+active.posts_per_day+" videos/day\n\nDrive raw_videos mein videos daalo — auto post hongi!\nProgress neeche dikh raha hai. 🎯");
 }
 
 function doEdit(){
   document.getElementById("ccard").style.display="none";
   document.getElementById("inp").value="Please change: ";
-  updateSend();
-  document.getElementById("inp").focus();
+  updateSend();document.getElementById("inp").focus();
 }
 
 function clearTopic(){
@@ -204,15 +199,20 @@ function clearTopic(){
   document.getElementById("abar").style.display="none";
   document.getElementById("live").style.display="none";
   document.getElementById("hsub").textContent="● Ready";
+  document.getElementById("progress-section").style.display="none";
+  fetch("/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({active:false})});
   addMsg("assistant","Topic clear! Naya topic bolo 🔄");
+}
+
+function runNow(){
+  fetch("/pipeline/run",{method:"POST"});
+  addMsg("assistant","▶ Pipeline shuru ho gayi! Neeche progress dekho.");
 }
 
 function updateSend(){
   const v=document.getElementById("inp").value.trim();
-  const b=document.getElementById("sendbtn");
-  b.className="send"+(v?" on":"");
+  document.getElementById("sendbtn").className="send"+(v?" on":"");
 }
-
 function handleKey(e){if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendInput();}}
 
 function toggleMic(){
@@ -221,16 +221,14 @@ function toggleMic(){
   if(!SR){alert("Chrome use karo");return;}
   rec=new SR();rec.lang="hi-IN";rec.interimResults=false;
   rec.onresult=e=>{
-    const t=e.results[0][0].transcript;
+    const txt=e.results[0][0].transcript;
     const inp=document.getElementById("inp");
-    inp.value=inp.value?inp.value+" "+t:t;
+    inp.value=inp.value?inp.value+" "+txt:txt;
     updateSend();setListening(false);inp.focus();
   };
-  rec.onerror=()=>setListening(false);
-  rec.onend=()=>setListening(false);
+  rec.onerror=()=>setListening(false);rec.onend=()=>setListening(false);
   rec.start();setListening(true);
 }
-
 function setListening(on){
   listening=on;
   const b=document.getElementById("micbtn");
@@ -238,7 +236,30 @@ function setListening(on){
   b.textContent=on?"⏹":"🎙️";
 }
 
-// Init
+// Pipeline status polling every 5 seconds
+function checkStatus(){
+  fetch("/pipeline/status").then(r=>r.json()).then(data=>{
+    if(!data.active)return;
+    document.getElementById("progress-section").style.display="block";
+    const bar=document.getElementById("progress-bar");
+    const txt=document.getElementById("progress-text");
+    const cnt=document.getElementById("posted-count");
+    bar.style.width=(data.progress||0)+"%";
+    cnt.textContent=`${data.posted_today}/${data.max_per_day} aaj post hue`;
+    if(data.last_error){
+      txt.textContent="❌ "+data.last_error;
+      bar.style.background="#F56565";
+    } else if(data.progress===100){
+      txt.textContent="✅ "+data.step;
+      bar.style.background="#22C55E";
+    } else {
+      txt.textContent=data.step||"Ready";
+      bar.style.background="#00E5CC";
+    }
+  }).catch(()=>{});
+}
+setInterval(checkStatus,5000);
+
 addMsg("assistant","Namaste! 👋\n\nKaunsa topic chahiye?\n🎙️ Mic dabao ya neeche se select karo 👇");
 </script>
 </body>
