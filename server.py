@@ -1,17 +1,18 @@
 """
-AutoPost Server — connects frontend (AutoPost_AI_App.html) to backend pipeline.
-Deploy this on Railway. It runs 24/7 and posts videos automatically.
+AutoPost Server — serves frontend + handles Anthropic API calls.
+Deploy on Railway. Access via: https://autopost-backend-production-ca6f.up.railway.app
 """
 
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
-import json, os, threading, schedule, time
+import anthropic, os, json, threading, schedule, time
 from datetime import datetime
 
 app = Flask(__name__)
 CORS(app)
 
-# Current active config (set from frontend)
+client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+
 current_config = {
     "topic": "",
     "channel": "",
@@ -20,69 +21,73 @@ current_config = {
     "active": False
 }
 
-# ── API ROUTES ──────────────────────────────
+SYSTEM = """Tum AutoPost AI ho. Jab user topic de:
+1. Better version suggest karo
+2. 3 punchy captions do
+3. 8 hashtags do
+4. Confirm maango
 
+Confirm hone par SIRF yeh JSON do:
+```json
+{"confirmed":true,"topic":"...","caption":"...","hashtags":["t1","t2","t3","t4","t5","t6","t7","t8"],"posts_per_day":3}
+```
+Chhote jawab. Hindi/English dono okay."""
+
+# ── SERVE FRONTEND ──────────────────────────
+@app.route("/")
+def index():
+    return send_file("index.html")
+
+# ── CLAUDE CHAT API ─────────────────────────
+@app.route("/chat", methods=["POST"])
+def chat():
+    data = request.json
+    messages = data.get("messages", [])
+    
+    response = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=800,
+        system=SYSTEM,
+        messages=messages
+    )
+    
+    return jsonify({
+        "reply": response.content[0].text
+    })
+
+# ── CONFIG ──────────────────────────────────
 @app.route("/config", methods=["GET"])
 def get_config():
-    """Frontend reads current config."""
     return jsonify(current_config)
 
 @app.route("/config", methods=["POST"])
 def set_config():
-    """Frontend sends new config when user confirms topic."""
     global current_config
-    data = request.json
-    current_config.update(data)
-    print(f"[{datetime.now()}] Config updated: {current_config['topic']}")
-    return jsonify({"status": "ok", "config": current_config})
+    current_config.update(request.json)
+    print(f"[{datetime.now()}] Config: {current_config['topic']}")
+    return jsonify({"status": "ok"})
 
 @app.route("/status", methods=["GET"])
 def status():
-    """Frontend checks if pipeline is running."""
-    return jsonify({
-        "active": current_config["active"],
-        "topic": current_config["topic"],
-        "channel": current_config["channel"],
-        "time": datetime.now().isoformat()
-    })
+    return jsonify({"status": "running", "config": current_config})
 
-@app.route("/trigger", methods=["POST"])
-def trigger():
-    """Manually trigger one pipeline run."""
-    threading.Thread(target=run_pipeline_once).start()
-    return jsonify({"status": "triggered"})
-
-# ── PIPELINE RUNNER ─────────────────────────
-
-def run_pipeline_once():
-    """Run the video generation pipeline once."""
-    if not current_config.get("active") or not current_config.get("topic"):
-        print("Pipeline not active or no topic set.")
+# ── SCHEDULER ───────────────────────────────
+def run_pipeline():
+    if not current_config.get("active"):
         return
-    print(f"[{datetime.now()}] Running pipeline for: {current_config['topic']}")
-    # Import and run your existing pipeline here
-    try:
-        # This calls your existing football_shorts_base code
-        # Update this import to match your actual pipeline file
-        os.system("python football_shorts_base__1_.py")
-    except Exception as e:
-        print(f"Pipeline error: {e}")
+    print(f"[{datetime.now()}] Pipeline running for: {current_config['topic']}")
+    # Your pipeline code runs here
 
-def run_scheduler():
-    """Run pipeline at scheduled times every day."""
-    schedule.every().day.at("09:00").do(run_pipeline_once)
-    schedule.every().day.at("13:00").do(run_pipeline_once)
-    schedule.every().day.at("18:00").do(run_pipeline_once)
+def scheduler():
+    schedule.every().day.at("09:00").do(run_pipeline)
+    schedule.every().day.at("13:00").do(run_pipeline)
+    schedule.every().day.at("18:00").do(run_pipeline)
     while True:
         schedule.run_pending()
         time.sleep(60)
 
-# ── START ───────────────────────────────────
-
 if __name__ == "__main__":
-    # Start scheduler in background
-    t = threading.Thread(target=run_scheduler, daemon=True)
-    t.start()
-    print("AutoPost Server started!")
-    print("Scheduler running: 9am, 1pm, 6pm daily")
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+    threading.Thread(target=scheduler, daemon=True).start()
+    port = int(os.environ.get("PORT", 5000))
+    print(f"Server running on port {port}")
+    app.run(host="0.0.0.0", port=port)
