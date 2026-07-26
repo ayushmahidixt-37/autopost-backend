@@ -1,4 +1,7 @@
 from flask import Flask, request, jsonify, send_file
+import subprocess as sp
+sp.run(["apt-get", "update", "-qq"], capture_output=True)
+sp.run(["apt-get", "install", "-y", "-qq", "ffmpeg"], capture_output=True)
 from flask_cors import CORS
 import anthropic, os, json, threading, schedule, time, subprocess, tempfile
 from datetime import datetime
