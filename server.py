@@ -104,11 +104,17 @@ def move_to_archive(drive, file_id, folder_id):
 
 # ── VIDEO PROCESSING ─────────────────────────
 def add_overlays(input_path, output_path, caption, topic):
-    caption_esc = caption.upper().replace("'", "").replace(":", "")[:50]
-    topic_esc = topic[:30].replace("'", "").replace(":", "")
     font = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-    
-    vf = "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280"
+    caption_esc = caption.upper().replace("'","").replace(":","")[:50]
+    topic_esc = topic[:30].replace("'","").replace(":","")
+    vf = (
+         f"scale=1080:1920:force_original_aspect_ratio=increase,"
+         f"crop=1080:1920,"
+         f"drawbox=x=0:y=0:w=iw:h=70:color=#F5C518@0.92:t=fill,"
+         f"drawtext=text='{topic_esc}':fontfile={font}:fontsize=26:fontcolor=black:x=(w-text_w)/2:y=22,"
+         f"drawtext=text='{caption_esc}':fontfile={font}:fontsize=38:fontcolor=white:borderw=3:bordercolor=black:x=(w-text_w)/2:y=h-120,"
+         f"drawtext=text='{YT_CHANNEL}':fontfile={font}:fontsize=22:fontcolor=white@0.65:x=w-text_w-18:y=h-44"
+      )
     result = subprocess.run([
         "ffmpeg", "-y", "-i", input_path,
         "-vf", vf,
