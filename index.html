@@ -10,10 +10,38 @@
   body{background:#080B12;color:#E8EDF5;font-family:'Inter',sans-serif;min-height:100vh}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
   @keyframes bounce{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-6px)}}
-  @keyframes progress-anim{from{background-position:40px 0}to{background-position:0 0}}
+  @keyframes stripe{from{background-position:40px 0}to{background-position:0 0}}
   ::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:#1A2035;border-radius:2px}
+
   .wrap{max-width:480px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column}
+
+  /* HEADER */
   .header{position:sticky;top:0;z-index:10;background:rgba(8,11,18,.95);backdrop-filter:blur(14px);border-bottom:1px solid #1A2035;padding:13px 16px;display:flex;align-items:center;gap:12px}
+
+  /* VIDEO TYPE TOGGLE */
+  .type-toggle{margin:12px 16px;display:flex;gap:0;background:#0F1420;border:1px solid #1A2035;border-radius:10px;overflow:hidden}
+  .type-btn{flex:1;padding:10px;text-align:center;cursor:pointer;font-size:12px;font-weight:700;color:#4A5568;transition:all .2s;letter-spacing:.5px}
+  .type-btn.active.shorts{background:#00E5CC;color:#080B12}
+  .type-btn.active.regular{background:#F5C518;color:#080B12}
+  .type-info{margin:4px 16px 8px;font-size:11px;color:#4A5568;text-align:center}
+
+  /* ACTIVE BADGE */
+  .active-bar{margin:8px 16px 4px;background:rgba(0,229,204,.08);border:1px solid rgba(0,229,204,.2);border-radius:12px;padding:11px 14px;display:none;align-items:center;gap:10px}
+  .dot{width:7px;height:7px;border-radius:50%;background:#22C55E;box-shadow:0 0 8px #22C55E;animation:pulse 2s infinite;flex-shrink:0}
+
+  /* PIPELINE STATUS */
+  .pipeline{margin:8px 16px;background:#0F1420;border:1px solid #1A2035;border-radius:12px;padding:14px;display:none}
+  .pipeline-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+  .pipeline-title{font-size:11px;font-weight:700;color:#00E5CC;letter-spacing:1px}
+  .posted-count{font-size:11px;color:#4A5568;font-family:monospace}
+  .bar-wrap{height:8px;background:#1A2035;border-radius:4px;overflow:hidden;margin-bottom:8px}
+  .bar{height:100%;background:#00E5CC;border-radius:4px;transition:width .5s;width:0%;
+    background-image:linear-gradient(45deg,rgba(255,255,255,.1) 25%,transparent 25%,transparent 50%,rgba(255,255,255,.1) 50%,rgba(255,255,255,.1) 75%,transparent 75%);
+    background-size:40px 40px;animation:stripe 1s linear infinite}
+  .bar-text{font-size:12px;color:#6B7280}
+  .run-btn{width:100%;padding:10px;background:#00E5CC22;border:1px solid #00E5CC44;border-radius:8px;color:#00E5CC;font-weight:700;font-size:13px;cursor:pointer;margin-top:10px;font-family:'Inter',sans-serif}
+
+  /* CHAT */
   .chat{flex:1;overflow-y:auto;padding:12px 16px 16px}
   .msg{display:flex;gap:8px;margin-bottom:12px;align-items:flex-end}
   .msg.user{flex-direction:row-reverse}
@@ -24,25 +52,20 @@
   .msg.user .bubble{background:#00E5CC;color:#080B12;border:none;font-weight:600;border-radius:16px 16px 4px 16px}
   .time{font-size:10px;color:#4A5568;margin-top:3px}
   .msg.user .time{text-align:right}
+  .typing-dots{display:flex;gap:5px;padding:14px 18px}
+  .typing-dots span{width:7px;height:7px;border-radius:50%;background:#4A5568;display:inline-block}
+  .typing-dots span:nth-child(1){animation:bounce .8s 0s infinite}
+  .typing-dots span:nth-child(2){animation:bounce .8s .15s infinite}
+  .typing-dots span:nth-child(3){animation:bounce .8s .3s infinite}
 
-  /* Progress Section */
-  .progress-section{margin:12px 16px;background:#0F1420;border:1px solid #1A2035;border-radius:12px;padding:14px;display:none}
-  .progress-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
-  .progress-title{font-size:11px;font-weight:700;color:#00E5CC;letter-spacing:1px}
-  .posted-count{font-size:11px;color:#4A5568;font-family:monospace}
-  .progress-bar-wrap{height:8px;background:#1A2035;border-radius:4px;overflow:hidden;margin-bottom:8px}
-  .progress-bar{height:100%;background:#00E5CC;border-radius:4px;transition:width .5s ease;width:0%;
-    background-image:linear-gradient(45deg,rgba(255,255,255,.1) 25%,transparent 25%,transparent 50%,rgba(255,255,255,.1) 50%,rgba(255,255,255,.1) 75%,transparent 75%,transparent);
-    background-size:40px 40px;animation:progress-anim 1s linear infinite}
-  .progress-text{font-size:12px;color:#6B7280}
-  .run-btn{width:100%;padding:10px;background:#00E5CC22;border:1px solid #00E5CC44;border-radius:8px;color:#00E5CC;font-weight:700;font-size:13px;cursor:pointer;margin-top:10px;font-family:'Inter',sans-serif}
-  .run-btn:hover{background:#00E5CC33}
-
+  /* CONFIRM CARD */
   .confirm{margin:0 16px 12px;background:#0F1420;border:1px solid #00E5CC44;border-radius:14px;padding:16px;display:none}
-  .active-bar{margin:10px 16px 4px;background:rgba(0,229,204,.08);border:1px solid rgba(0,229,204,.2);border-radius:12px;padding:11px 14px;display:none;align-items:center;gap:10px}
-  .dot{width:7px;height:7px;border-radius:50%;background:#22C55E;box-shadow:0 0 8px #22C55E;animation:pulse 2s infinite;flex-shrink:0}
+
+  /* CHIPS */
   .chips{padding:4px 16px 10px;display:flex;gap:8px;flex-wrap:wrap}
   .chip{background:#0F1420;border:1px solid #1A2035;border-radius:20px;padding:7px 13px;color:#E8EDF5;font-size:12px;cursor:pointer;font-family:'Inter',sans-serif}
+
+  /* INPUT BAR */
   .input-bar{padding:12px 16px;border-top:1px solid #1A2035;display:flex;gap:8px;align-items:flex-end;background:rgba(8,11,18,.96);backdrop-filter:blur(12px)}
   .mic{width:44px;height:44px;border-radius:12px;background:#0F1420;border:1px solid #1A2035;color:#E8EDF5;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;flex-shrink:0}
   .mic.on{background:#F56565;border-color:#F56565;box-shadow:0 0 14px rgba(245,101,101,.5)}
@@ -51,15 +74,27 @@
   .send.on{background:#00E5CC;color:#080B12;cursor:pointer}
   .btn-p{flex:1;padding:13px;background:#00E5CC;color:#080B12;border:none;border-radius:10px;font-weight:800;font-size:14px;cursor:pointer;font-family:'Inter',sans-serif}
   .btn-s{padding:13px 16px;background:#1A2035;color:#E8EDF5;border:none;border-radius:10px;font-weight:600;font-size:14px;cursor:pointer;font-family:'Inter',sans-serif}
-  .typing-dots{display:flex;gap:5px;padding:14px 18px}
-  .typing-dots span{width:7px;height:7px;border-radius:50%;background:#4A5568;display:inline-block}
-  .typing-dots span:nth-child(1){animation:bounce .8s 0s infinite}
-  .typing-dots span:nth-child(2){animation:bounce .8s .15s infinite}
-  .typing-dots span:nth-child(3){animation:bounce .8s .3s infinite}
+
+  /* HISTORY TAB */
+  .history-item{background:#0F1420;border:1px solid #1A2035;border-radius:10px;padding:12px 14px;margin-bottom:10px}
+  .history-title{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .history-meta{font-size:11px;color:#4A5568;margin-top:4px}
+  .badge{display:inline-block;font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;text-transform:uppercase;letter-spacing:.5px;margin-right:6px}
+  .badge-shorts{background:rgba(0,229,204,.15);color:#00E5CC}
+  .badge-regular{background:rgba(245,197,24,.15);color:#F5C518}
+  .badge-private{background:#1A2035;color:#4A5568}
+  .badge-public{background:rgba(34,197,94,.15);color:#22C55E}
+
+  /* TABS */
+  .tabs{display:flex;border-bottom:1px solid #1A2035;background:#0F1420}
+  .tab{flex:1;padding:11px 4px;text-align:center;font-size:11px;font-weight:600;cursor:pointer;color:#4A5568;border-bottom:2px solid transparent;transition:all .2s;text-transform:uppercase;letter-spacing:.5px}
+  .tab.active{color:#00E5CC;border-bottom-color:#00E5CC}
 </style>
 </head>
 <body>
 <div class="wrap">
+
+  <!-- HEADER -->
   <div class="header">
     <span style="font-size:24px">🎬</span>
     <div style="flex:1">
@@ -69,60 +104,126 @@
     <div id="live" style="display:none;font-size:9px;font-weight:700;color:#22C55E;background:rgba(34,197,94,.12);padding:3px 10px;border-radius:20px;letter-spacing:1px">LIVE</div>
   </div>
 
-  <div class="active-bar" id="abar">
-    <div class="dot"></div>
-    <div style="flex:1;min-width:0">
-      <div style="font-size:10px;font-weight:700;color:#00E5CC">ACTIVE TOPIC</div>
-      <div id="atopic" style="font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
+  <!-- TABS -->
+  <div class="tabs">
+    <div class="tab active" onclick="showTab('chat',this)">💬 Chat</div>
+    <div class="tab" onclick="showTab('history',this)">📋 History</div>
+  </div>
+
+  <!-- ─── CHAT TAB ─── -->
+  <div id="tab-chat" style="display:flex;flex-direction:column;flex:1">
+
+    <!-- VIDEO TYPE TOGGLE -->
+    <div class="type-toggle">
+      <div class="type-btn active shorts" id="btn-shorts" onclick="setType('shorts')">
+        ⚡ SHORTS
+      </div>
+      <div class="type-btn regular" id="btn-regular" onclick="setType('regular')">
+        🎥 REGULAR
+      </div>
     </div>
-    <button onclick="clearTopic()" style="background:none;border:1px solid #1A2035;border-radius:8px;padding:5px 9px;color:#4A5568;cursor:pointer;font-size:11px">Change</button>
-  </div>
+    <div class="type-info" id="type-info">Shorts: 20s max • 9:16 vertical • #Shorts auto-added</div>
 
-  <!-- PROGRESS SECTION -->
-  <div class="progress-section" id="progress-section">
-    <div class="progress-header">
-      <span class="progress-title">⚙️ PIPELINE STATUS</span>
-      <span class="posted-count" id="posted-count">0/3 aaj</span>
+    <!-- ACTIVE BADGE -->
+    <div class="active-bar" id="abar">
+      <div class="dot"></div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:10px;font-weight:700;color:#00E5CC" id="atype-label">ACTIVE SHORTS</div>
+        <div id="atopic" style="font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
+      </div>
+      <button onclick="clearTopic()" style="background:none;border:1px solid #1A2035;border-radius:8px;padding:5px 9px;color:#4A5568;cursor:pointer;font-size:11px">Change</button>
     </div>
-    <div class="progress-bar-wrap">
-      <div class="progress-bar" id="progress-bar"></div>
+
+    <!-- PIPELINE STATUS -->
+    <div class="pipeline" id="pipeline">
+      <div class="pipeline-header">
+        <span class="pipeline-title">⚙️ PIPELINE</span>
+        <span class="posted-count" id="posted-count">0/3 aaj</span>
+      </div>
+      <div class="bar-wrap"><div class="bar" id="bar"></div></div>
+      <div class="bar-text" id="bar-text">Ready</div>
+      <button class="run-btn" onclick="runNow()">▶ Abhi Ek Video Post Karo</button>
     </div>
-    <div class="progress-text" id="progress-text">Ready</div>
-    <button class="run-btn" onclick="runNow()">▶ Abhi Ek Video Post Karo</button>
-  </div>
 
-  <div class="chat" id="chat"></div>
+    <!-- MESSAGES -->
+    <div class="chat" id="chat"></div>
 
-  <div class="confirm" id="ccard">
-    <div style="font-size:10px;font-weight:800;color:#00E5CC;letter-spacing:1.5px;margin-bottom:12px">✅ CONFIRM KARO</div>
-    <div id="crow"></div>
-    <div style="display:flex;gap:8px;margin-top:14px">
-      <button class="btn-p" onclick="doConfirm()">🚀 START POSTING</button>
-      <button class="btn-s" onclick="doEdit()">✏️ Badlo</button>
+    <!-- CONFIRM CARD -->
+    <div class="confirm" id="ccard">
+      <div style="font-size:10px;font-weight:800;color:#00E5CC;letter-spacing:1.5px;margin-bottom:12px">✅ CONFIRM KARO</div>
+      <div id="crow"></div>
+      <div style="display:flex;gap:8px;margin-top:14px">
+        <button class="btn-p" onclick="doConfirm()">🚀 START POSTING</button>
+        <button class="btn-s" onclick="doEdit()">✏️ Badlo</button>
+      </div>
+    </div>
+
+    <!-- QUICK CHIPS -->
+    <div class="chips" id="chips">
+      <div class="chip" onclick="send('World Cup 2026 football')">⚽ World Cup</div>
+      <div class="chip" onclick="send('IPL Cricket 2026')">🏏 Cricket</div>
+      <div class="chip" onclick="send('Breaking News India')">📰 News</div>
+      <div class="chip" onclick="send('Bollywood latest')">🎬 Bollywood</div>
+    </div>
+
+    <!-- INPUT BAR -->
+    <div class="input-bar">
+      <button class="mic" id="micbtn" onclick="toggleMic()">🎙️</button>
+      <textarea id="inp" rows="1" placeholder="Topic bolo ya type karo..." oninput="updateSend()" onkeydown="handleKey(event)"></textarea>
+      <button class="send" id="sendbtn" onclick="sendInput()">➤</button>
     </div>
   </div>
 
-  <div class="chips" id="chips">
-    <div class="chip" onclick="send('World Cup 2026 football')">⚽ World Cup</div>
-    <div class="chip" onclick="send('IPL Cricket 2026')">🏏 Cricket</div>
-    <div class="chip" onclick="send('Breaking News India')">📰 News</div>
-    <div class="chip" onclick="send('Bollywood latest')">🎬 Bollywood</div>
+  <!-- ─── HISTORY TAB ─── -->
+  <div id="tab-history" class="hidden" style="flex:1;overflow-y:auto;padding:16px">
+    <div style="font-size:11px;font-weight:700;color:#00E5CC;letter-spacing:1px;margin-bottom:16px">POSTED VIDEOS</div>
+    <div id="history-list">
+      <div style="text-align:center;padding:40px;color:#4A5568">
+        <div style="font-size:32px;margin-bottom:8px">📋</div>
+        <div>Koi history nahi abhi</div>
+      </div>
+    </div>
   </div>
 
-  <div class="input-bar">
-    <button class="mic" id="micbtn" onclick="toggleMic()">🎙️</button>
-    <textarea id="inp" rows="1" placeholder="Topic bolo ya type karo..." oninput="updateSend()" onkeydown="handleKey(event)"></textarea>
-    <button class="send" id="sendbtn" onclick="sendInput()">➤</button>
-  </div>
 </div>
 
 <script>
 let msgs=[], busy=false, pending=null, active=null, rec=null, listening=false;
+let videoType = "shorts";
+
 function t(){return new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});}
 
-function addMsg(role,text){msgs.push({role,text,time:t()});render();}
+// ── TAB ──
+function showTab(name, el){
+  ["chat","history"].forEach(n=>{
+    const t=document.getElementById("tab-"+n);
+    t.style.display="none";
+  });
+  document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+  const tab=document.getElementById("tab-"+name);
+  tab.style.display=name==="chat"?"flex":"block";
+  el.classList.add("active");
+  if(name==="history") loadHistory();
+}
 
-function render(){
+// ── VIDEO TYPE ──
+function setType(type){
+  videoType = type;
+  document.getElementById("btn-shorts").className="type-btn"+(type==="shorts"?" active shorts":"");
+  document.getElementById("btn-regular").className="type-btn"+(type==="regular"?" active regular":"");
+  document.getElementById("type-info").textContent = type==="shorts"
+    ? "Shorts: 20s max • 9:16 vertical • #Shorts auto-added"
+    : "Regular: Variable length • 16:9 horizontal • Full description";
+  if(active){
+    fetch("/config",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({video_type:type})});
+  }
+}
+
+// ── MESSAGES ──
+function addMsg(role,text){msgs.push({role,text,time:t()});renderMsgs();}
+
+function renderMsgs(){
   const c=document.getElementById("chat");
   c.innerHTML=msgs.map(m=>{
     const u=m.role==="user";
@@ -143,6 +244,7 @@ function showTyping(){
 }
 function hideTyping(){const t=document.getElementById("typing");if(t)t.remove();}
 
+// ── SEND ──
 async function send(text){
   const msg=(text||document.getElementById("inp").value).trim();
   if(!msg||busy)return;
@@ -162,17 +264,22 @@ async function send(text){
     if(match){try{const c=JSON.parse(match[1]);if(c.confirmed)showConfirm(c);}catch{}}
   }catch(e){hideTyping();addMsg("assistant","❌ Error. Dobara try karo.");busy=false;}
 }
-
 function sendInput(){send(document.getElementById("inp").value);}
 
+// ── CONFIRM ──
 function showConfirm(cfg){
   pending=cfg;
   document.getElementById("crow").innerHTML=[
-    ["Topic",cfg.topic],["Caption",cfg.caption||""],["Posts/Day",""+cfg.posts_per_day]
+    ["Topic",cfg.topic],
+    ["Type",cfg.video_type==="shorts"?"⚡ Shorts":"🎥 Regular"],
+    ["Caption",cfg.caption||""],
+    ["Posts/Day",""+cfg.posts_per_day]
   ].map(([k,v])=>`<div style="display:flex;justify-content:space-between;gap:12px;margin-bottom:8px">
     <span style="font-size:11px;color:#4A5568;text-transform:uppercase;flex-shrink:0">${k}</span>
     <span style="font-size:13px;font-weight:600;text-align:right">${v}</span></div>`).join("");
   document.getElementById("ccard").style.display="block";
+  // Sync video type from AI response
+  if(cfg.video_type) setType(cfg.video_type);
 }
 
 function doConfirm(){
@@ -180,12 +287,21 @@ function doConfirm(){
   document.getElementById("ccard").style.display="none";
   document.getElementById("abar").style.display="flex";
   document.getElementById("atopic").textContent=active.topic;
+  document.getElementById("atype-label").textContent=
+    active.video_type==="shorts"?"ACTIVE ⚡ SHORTS":"ACTIVE 🎥 REGULAR";
   document.getElementById("live").style.display="block";
   document.getElementById("hsub").textContent="● "+active.topic.slice(0,28);
-  document.getElementById("progress-section").style.display="block";
+  document.getElementById("pipeline").style.display="block";
+
   fetch("/config",{method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({...active,active:true})});
-  addMsg("assistant","✅ Active ho gaya!\n\n📌 \""+active.topic+"\"\n📅 "+active.posts_per_day+" videos/day\n\nDrive raw_videos mein videos daalo — auto post hongi!\nProgress neeche dikh raha hai. 🎯");
+    body:JSON.stringify({...active,video_type:videoType,active:true})});
+
+  const typeLabel = videoType==="shorts" ? "⚡ Shorts (20s, 9:16)" : "🎥 Regular Video (16:9)";
+  addMsg("assistant",
+    `✅ Active ho gaya!\n\n📌 "${active.topic}"\n${typeLabel}\n📅 ${active.posts_per_day} videos/day\n\n`+
+    `Claude video frame analyze karega aur:\n• Captions generate karega\n• Thumbnail banayega\n• Watermark add karega\n\n`+
+    `Drive raw_videos folder mein videos daalo — auto post hongi! 🎯`
+  );
 }
 
 function doEdit(){
@@ -199,22 +315,50 @@ function clearTopic(){
   document.getElementById("abar").style.display="none";
   document.getElementById("live").style.display="none";
   document.getElementById("hsub").textContent="● Ready";
-  document.getElementById("progress-section").style.display="none";
+  document.getElementById("pipeline").style.display="none";
   fetch("/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({active:false})});
   addMsg("assistant","Topic clear! Naya topic bolo 🔄");
 }
 
 function runNow(){
   fetch("/pipeline/run",{method:"POST"});
-  addMsg("assistant","▶ Pipeline shuru ho gayi! Neeche progress dekho.");
+  addMsg("assistant","▶ Pipeline shuru! Progress neeche dekho 👆");
 }
 
+// ── HISTORY ──
+async function loadHistory(){
+  try{
+    const r=await fetch("/history");
+    const data=await r.json();
+    const posted=data.posted||[];
+    const list=document.getElementById("history-list");
+    if(!posted.length){
+      list.innerHTML=`<div style="text-align:center;padding:40px;color:#4A5568"><div style="font-size:32px;margin-bottom:8px">📋</div><div>Koi history nahi abhi</div></div>`;
+      return;
+    }
+    list.innerHTML=[...posted].reverse().map(p=>`
+      <div class="history-item">
+        <div class="history-title">${p.title||p.file}</div>
+        <div class="history-meta">
+          <span class="badge ${p.type==="shorts"?"badge-shorts":"badge-regular"}">${p.type||"shorts"}</span>
+          <span class="badge badge-private">private</span>
+          ${p.date} • ${p.topic||""}
+        </div>
+        ${p.video_id?`<div style="font-size:10px;color:#00E5CC;margin-top:6px">
+          <a href="https://youtube.com/watch?v=${p.video_id}" target="_blank" style="color:#00E5CC">▶ YouTube pe dekho</a>
+        </div>`:""}
+      </div>`).join("");
+  }catch(e){console.error(e);}
+}
+
+// ── INPUT ──
 function updateSend(){
   const v=document.getElementById("inp").value.trim();
   document.getElementById("sendbtn").className="send"+(v?" on":"");
 }
 function handleKey(e){if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendInput();}}
 
+// ── MIC ──
 function toggleMic(){
   if(listening){if(rec)rec.stop();return;}
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
@@ -236,16 +380,16 @@ function setListening(on){
   b.textContent=on?"⏹":"🎙️";
 }
 
-// Pipeline status polling every 5 seconds
+// ── PIPELINE POLLING ──
 function checkStatus(){
   fetch("/pipeline/status").then(r=>r.json()).then(data=>{
     if(!data.active)return;
-    document.getElementById("progress-section").style.display="block";
-    const bar=document.getElementById("progress-bar");
-    const txt=document.getElementById("progress-text");
+    document.getElementById("pipeline").style.display="block";
+    const bar=document.getElementById("bar");
+    const txt=document.getElementById("bar-text");
     const cnt=document.getElementById("posted-count");
     bar.style.width=(data.progress||0)+"%";
-    cnt.textContent=`${data.posted_today}/${data.max_per_day} aaj post hue`;
+    cnt.textContent=`${data.posted_today}/${data.max_per_day} aaj`;
     if(data.last_error){
       txt.textContent="❌ "+data.last_error;
       bar.style.background="#F56565";
@@ -260,7 +404,8 @@ function checkStatus(){
 }
 setInterval(checkStatus,5000);
 
-addMsg("assistant","Namaste! 👋\n\nKaunsa topic chahiye?\n🎙️ Mic dabao ya neeche se select karo 👇");
+// ── INIT ──
+addMsg("assistant","Namaste! 👋\n\nPehle video type choose karo:\n⚡ SHORTS — 20 seconds, vertical\n🎥 REGULAR — full video, horizontal\n\nPhir topic bolo — Claude video analyze karke captions, thumbnail sab generate karega! 🎯");
 </script>
 </body>
 </html>

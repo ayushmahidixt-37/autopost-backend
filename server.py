@@ -2,9 +2,11 @@ from flask import Flask, request, jsonify, send_file
 import subprocess as sp
 sp.run(["apt-get", "update", "-qq"], capture_output=True)
 sp.run(["apt-get", "install", "-y", "-qq", "ffmpeg"], capture_output=True)
+
 from flask_cors import CORS
-import anthropic, os, json, threading, schedule, time, subprocess, tempfile
+import anthropic, os, json, threading, schedule, time, tempfile, base64
 from datetime import datetime
+from PIL import Image, ImageDraw, ImageFont
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
@@ -14,41 +16,42 @@ import io
 app = Flask(__name__)
 CORS(app)
 
-# ── SETUP ───────────────────────────────────
+# ── SETUP ────────────────────────────────────
 ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 GOOGLE_TOKEN  = os.environ.get("GOOGLE_TOKEN", "")
 DRIVE_FOLDER  = os.environ.get("DRIVE_FOLDER", "raw_videos")
-YT_CHANNEL    = os.environ.get("YOUTUBE_CHANNEL", "")
+YT_CHANNEL    = os.environ.get("YOUTUBE_CHANNEL", "@YourChannel")
 
 client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
 
 current_config = {
     "topic": "", "channel": "", "posts_per_day": 3,
-    "privacy": "private", "active": False
+    "privacy": "private", "active": False,
+    "video_type": "shorts",  # "shorts" or "regular"
+    "caption": "", "hashtags": []
 }
 
 pipeline_status = {
     "running": False, "step": "", "progress": 0,
     "last_run": None, "last_error": None,
-    "videos_processed": 0, "videos_posted": 0
+    "videos_posted": 0
 }
 
 SYSTEM = """Tum AutoPost AI ho. Jab user topic de:
 1. Better version suggest karo
 2. 3 punchy captions do
 3. 8 hashtags do
-4. Confirm maango
+4. Video type poocho (Shorts ya Regular)
+5. Confirm maango
 
 Confirm hone par SIRF yeh JSON do:
 ```json
-{"confirmed":true,"topic":"...","caption":"...","hashtags":["t1","t2","t3","t4","t5","t6","t7","t8"],"posts_per_day":3}
+{"confirmed":true,"topic":"...","caption":"...","hashtags":["t1","t2","t3","t4","t5","t6","t7","t8"],"posts_per_day":3,"video_type":"shorts"}
 ```
 Chhote jawab. Hindi/English dono okay."""
 
 # ── GOOGLE AUTH ──────────────────────────────
 def get_credentials():
-    if not GOOGLE_TOKEN:
-        raise Exception("GOOGLE_TOKEN not set in Railway variables")
     creds = Credentials.from_authorized_user_info(json.loads(GOOGLE_TOKEN))
     if creds.expired and creds.refresh_token:
         creds.refresh(Request())
@@ -102,48 +105,280 @@ def move_to_archive(drive, file_id, folder_id):
         fields="id,parents"
     ).execute()
 
+# ── CLAUDE VIDEO ANALYSIS ────────────────────
+def extract_frames(video_path, num_frames=3):
+    """Extract multiple frames from video for Claude to analyze."""
+    frames = []
+    duration_result = sp.run([
+        "ffprobe", "-v", "error", "-show_entries", "format=duration",
+        "-of", "default=noprint_wrappers=1:nokey=1", video_path
+    ], capture_output=True, text=True)
+    
+    try:
+        duration = float(duration_result.stdout.strip())
+    except:
+        duration = 30.0
+    
+    for i in range(num_frames):
+        timestamp = duration * (i + 1) / (num_frames + 1)
+        frame_path = f"{video_path}_frame_{i}.jpg"
+        sp.run([
+            "ffmpeg", "-y", "-i", video_path,
+            "-ss", str(timestamp), "-frames:v", "1",
+            "-q:v", "2", frame_path
+        ], capture_output=True)
+        if os.path.exists(frame_path):
+            frames.append(frame_path)
+    return frames
+
+def analyze_video_with_claude(video_path, config):
+    """Claude analyzes video frames and generates content."""
+    video_type = config.get("video_type", "shorts")
+    topic = config.get("topic", "")
+    
+    # Extract frames
+    frame_paths = extract_frames(video_path, num_frames=3)
+    
+    content = []
+    
+    # Add frames for Claude to analyze
+    for fp in frame_paths:
+        if os.path.exists(fp):
+            with open(fp, "rb") as img:
+                img_b64 = base64.b64encode(img.read()).decode()
+            content.append({
+                "type": "image",
+                "source": {"type": "base64", "media_type": "image/jpeg", "data": img_b64}
+            })
+    
+    # Cleanup frame files
+    for fp in frame_paths:
+        if os.path.exists(fp):
+            os.remove(fp)
+    
+    if video_type == "shorts":
+        prompt = f"""Tum ek YouTube Shorts content expert ho.
+
+Channel topic: "{topic}"
+Channel: {YT_CHANNEL}
+Video type: SHORTS (max 20 seconds, vertical 9:16)
+Date: {datetime.now().strftime('%B %d, %Y')}
+
+In video frames ko analyze karo aur generate karo:
+
+1. HEADER TEXT: 3-5 words max, bold statement (video ke content se related)
+2. CAPTION: Max 8 words, curiosity-gap style, do NOT reveal outcome
+3. TITLE: Max 50 characters, punchy (SHORTS ke liye chhota title best hai)
+4. DESCRIPTION: 2-3 lines max, topic explain karo + call to action
+5. HASHTAGS: 8 hashtags - #Shorts zaroori include karo
+6. BANNER: "SHORTS • {datetime.now().strftime('%b %d').upper()}"
+7. THUMBNAIL_TEXT: 2-3 words jo thumbnail pe likhe jayein (bold, impactful)
+
+SIRF JSON respond karo:
+{{
+  "header": "...",
+  "caption": "...",
+  "yt_title": "...",
+  "yt_description": "...",
+  "hashtags": ["Shorts", "tag2", "tag3", "tag4", "tag5", "tag6", "tag7", "tag8"],
+  "banner_text": "...",
+  "thumbnail_text": "..."
+}}"""
+    else:
+        prompt = f"""Tum ek YouTube content expert ho.
+
+Channel topic: "{topic}"
+Channel: {YT_CHANNEL}
+Video type: REGULAR VIDEO (horizontal 16:9, variable length)
+Date: {datetime.now().strftime('%B %d, %Y')}
+
+In video frames ko analyze karo aur generate karo:
+
+1. TITLE: Max 70 characters, SEO-friendly, engaging
+2. DESCRIPTION: 5-7 lines - intro, key points, call to action, links placeholder
+3. CAPTION: 10-12 words, descriptive
+4. HASHTAGS: 10 relevant hashtags (no #Shorts)
+5. BANNER: Topic + date
+6. THUMBNAIL_TEXT: 3-4 words, high impact
+
+SIRF JSON respond karo:
+{{
+  "header": "...",
+  "caption": "...",
+  "yt_title": "...",
+  "yt_description": "...",
+  "hashtags": ["tag1", "tag2", "tag3", "tag4", "tag5", "tag6", "tag7", "tag8", "tag9", "tag10"],
+  "banner_text": "...",
+  "thumbnail_text": "..."
+}}"""
+    
+    content.append({"type": "text", "text": prompt})
+    
+    response = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=800,
+        messages=[{"role": "user", "content": content}]
+    )
+    
+    raw = response.content[0].text.strip()
+    raw = raw.replace("```json", "").replace("```", "").strip()
+    return json.loads(raw)
+
+# ── THUMBNAIL GENERATOR ──────────────────────
+def generate_thumbnail(metadata, video_type, output_path):
+    """Generate a thumbnail image using PIL."""
+    if video_type == "shorts":
+        W, H = 1080, 1920
+    else:
+        W, H = 1280, 720
+    
+    # Dark background
+    img = Image.new("RGB", (W, H), (12, 16, 28))
+    draw = ImageDraw.Draw(img)
+    
+    try:
+        font_big   = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 120 if video_type=="shorts" else 80)
+        font_med   = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 60 if video_type=="shorts" else 40)
+        font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 40 if video_type=="shorts" else 28)
+    except:
+        font_big = font_med = font_small = ImageFont.load_default()
+    
+    # Accent bar top
+    draw.rectangle([(0, 0), (W, 16)], fill=(0, 229, 204))
+    
+    # Thumbnail text (center)
+    thumb_text = metadata.get("thumbnail_text", metadata.get("header", "")).upper()
+    words = thumb_text.split()
+    lines, current = [], ""
+    for word in words:
+        test = (current + " " + word).strip()
+        bbox = draw.textbbox((0,0), test, font=font_big)
+        if bbox[2]-bbox[0] <= W-100:
+            current = test
+        else:
+            lines.append(current)
+            current = word
+    if current:
+        lines.append(current)
+    
+    line_h = font_big.size + 20
+    total_h = len(lines) * line_h
+    start_y = (H - total_h) // 2 - 50
+    
+    for i, line in enumerate(lines):
+        bbox = draw.textbbox((0,0), line, font=font_big)
+        tw = bbox[2]-bbox[0]
+        x = (W-tw)//2
+        y = start_y + i*line_h
+        # Shadow
+        draw.text((x+4, y+4), line, font=font_big, fill=(0,0,0))
+        draw.text((x, y), line, font=font_big, fill=(255,255,255))
+    
+    # Channel name bottom
+    ch = YT_CHANNEL
+    bbox = draw.textbbox((0,0), ch, font=font_small)
+    tw = bbox[2]-bbox[0]
+    draw.text(((W-tw)//2, H-100), ch, font=font_small, fill=(0,229,204))
+    
+    # Accent bar bottom
+    draw.rectangle([(0, H-16), (W, H)], fill=(0,229,204))
+    
+    img.save(output_path, quality=95)
+    return output_path
+
 # ── VIDEO PROCESSING ─────────────────────────
-def add_overlays(input_path, output_path, caption, topic):
+def process_video(input_path, output_path, metadata, video_type):
+    """Add overlays: banner, caption, watermark. Resize for type."""
+    caption    = metadata.get("caption", "").upper()[:50]
+    banner     = metadata.get("banner_text", "").upper()[:40]
+    channel    = YT_CHANNEL
+    
+    def esc(s):
+        return s.replace("'","").replace(":","").replace("[","").replace("]","")
+    
     font = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-    caption_esc = caption.upper().replace("'","").replace(":","")[:50]
-    topic_esc = topic[:30].replace("'","").replace(":","")
-    vf = (
-         f"scale=1080:1920:force_original_aspect_ratio=increase,"
-         f"crop=1080:1920,"
-         f"drawbox=x=0:y=0:w=iw:h=70:color=#F5C518@0.92:t=fill,"
-         f"drawtext=text='{topic_esc}':fontfile={font}:fontsize=26:fontcolor=black:x=(w-text_w)/2:y=22,"
-         f"drawtext=text='{caption_esc}':fontfile={font}:fontsize=38:fontcolor=white:borderw=3:bordercolor=black:x=(w-text_w)/2:y=h-120,"
-         f"drawtext=text='{YT_CHANNEL}':fontfile={font}:fontsize=22:fontcolor=white@0.65:x=w-text_w-18:y=h-44"
-      )
-    result = subprocess.run([
+    
+    if video_type == "shorts":
+        # Vertical 9:16, max 20 seconds
+        scale_filter = "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920"
+        fontsize_caption = 38
+        fontsize_banner  = 26
+        fontsize_channel = 22
+    else:
+        # Horizontal 16:9
+        scale_filter = "scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080"
+        fontsize_caption = 48
+        fontsize_banner  = 32
+        fontsize_channel = 28
+    
+    vf = ",".join([
+        scale_filter,
+        # Yellow banner top
+        "drawbox=x=0:y=0:w=iw:h=72:color=#F5C518@0.92:t=fill",
+        # Banner text
+        f"drawtext=text='{esc(banner)}':fontfile={font}:fontsize={fontsize_banner}:fontcolor=black:x=(w-text_w)/2:y=22",
+        # Caption bottom
+        f"drawtext=text='{esc(caption)}':fontfile={font}:fontsize={fontsize_caption}:fontcolor=white:borderw=3:bordercolor=black:x=(w-text_w)/2:y=h-120",
+        # Watermark
+        f"drawtext=text='{esc(channel)}':fontfile={font}:fontsize={fontsize_channel}:fontcolor=white@0.65:x=w-text_w-18:y=h-44",
+    ])
+    
+    cmd = [
         "ffmpeg", "-y", "-i", input_path,
         "-vf", vf,
         "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
-        "-c:a", "copy", output_path
-    ], capture_output=True, text=True)
+        "-c:a", "aac", "-b:a", "128k",
+    ]
+    
+    # For shorts: trim to 20 seconds max
+    if video_type == "shorts":
+        cmd += ["-t", "20"]
+    
+    cmd.append(output_path)
+    
+    result = sp.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
-        raise Exception(f"FFmpeg failed with code {result.returncode}")
+        raise Exception(f"FFmpeg failed: {result.stderr[-300:]}")
 
-def upload_youtube(video_path, title, description, tags, privacy):
+# ── YOUTUBE UPLOAD ───────────────────────────
+def upload_to_youtube(video_path, thumbnail_path, metadata, config):
     youtube = get_youtube()
+    
+    hashtags = metadata.get("hashtags", [])
+    description = metadata["yt_description"] + "\n\n" + " ".join(f"#{t}" for t in hashtags)
+    
     body = {
         "snippet": {
-            "title": title[:100],
+            "title":       metadata["yt_title"][:100],
             "description": description,
-            "tags": tags,
-            "categoryId": "22"
+            "tags":        hashtags,
+            "categoryId":  "17"
         },
         "status": {
-            "privacyStatus": privacy,
+            "privacyStatus":           config.get("privacy", "private"),
             "selfDeclaredMadeForKids": False
         }
     }
-    media = MediaFileUpload(video_path, mimetype="video/mp4", resumable=True)
-    req = youtube.videos().insert(part="snippet,status", body=body, media_body=media)
+    
+    media   = MediaFileUpload(video_path, mimetype="video/mp4", resumable=True)
+    request = youtube.videos().insert(part="snippet,status", body=body, media_body=media)
     response = None
     while response is None:
-        _, response = req.next_chunk()
-    return response["id"]
+        _, response = request.next_chunk()
+    
+    video_id = response["id"]
+    
+    # Set custom thumbnail
+    if thumbnail_path and os.path.exists(thumbnail_path):
+        try:
+            youtube.thumbnails().set(
+                videoId=video_id,
+                media_body=MediaFileUpload(thumbnail_path, mimetype="image/jpeg")
+            ).execute()
+        except Exception as e:
+            print(f"Thumbnail set failed: {e}")
+    
+    return video_id
 
 # ── HISTORY ──────────────────────────────────
 HISTORY_FILE = "/app/history.json"
@@ -165,23 +400,23 @@ def run_pipeline():
         return
     if not current_config.get("active") or not current_config.get("topic"):
         return
-
+    
     pipeline_status["running"] = True
     pipeline_status["last_error"] = None
-    today = datetime.now().date().isoformat()
+    today   = datetime.now().date().isoformat()
     history = load_history()
     posted_today = [p for p in history["posted"] if p.get("date") == today]
-    max_per_day = current_config.get("posts_per_day", 3)
-
+    max_per_day  = current_config.get("posts_per_day", 3)
+    video_type   = current_config.get("video_type", "shorts")
+    
     try:
         if len(posted_today) >= max_per_day:
             pipeline_status["step"] = f"Daily cap reached ({max_per_day}/day)"
-            pipeline_status["running"] = False
             return
 
         pipeline_status["step"] = "Connecting to Drive..."
         pipeline_status["progress"] = 10
-        drive = get_drive()
+        drive     = get_drive()
         folder_id = get_folder_id(drive, DRIVE_FOLDER)
 
         pipeline_status["step"] = "Finding new videos..."
@@ -190,34 +425,35 @@ def run_pipeline():
 
         if not videos:
             pipeline_status["step"] = "No new videos in Drive folder"
-            pipeline_status["running"] = False
             return
 
         video = videos[0]
-        pipeline_status["step"] = f"Downloading: {video['name']}"
-        pipeline_status["progress"] = 30
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            raw_path = os.path.join(tmpdir, "raw.mp4")
+            raw_path       = os.path.join(tmpdir, "raw.mp4")
             processed_path = os.path.join(tmpdir, "processed.mp4")
+            thumb_path     = os.path.join(tmpdir, "thumbnail.jpg")
 
+            pipeline_status["step"] = f"Downloading: {video['name']}"
+            pipeline_status["progress"] = 30
             download_video(drive, video["id"], raw_path)
-            pipeline_status["step"] = "Adding captions & watermark..."
-            pipeline_status["progress"] = 50
 
-            caption = current_config.get("caption", current_config["topic"][:50])
-            add_overlays(raw_path, processed_path, caption, current_config["topic"])
+            pipeline_status["step"] = "Claude is analyzing video..."
+            pipeline_status["progress"] = 45
+            metadata = analyze_video_with_claude(raw_path, current_config)
+            print(f"Analysis: {metadata.get('yt_title')}")
+
+            pipeline_status["step"] = "Generating thumbnail..."
+            pipeline_status["progress"] = 55
+            generate_thumbnail(metadata, video_type, thumb_path)
+
+            pipeline_status["step"] = "Adding captions, banner & watermark..."
+            pipeline_status["progress"] = 65
+            process_video(raw_path, processed_path, metadata, video_type)
 
             pipeline_status["step"] = "Uploading to YouTube..."
-            pipeline_status["progress"] = 75
-
-            hashtags = current_config.get("hashtags", [])
-            desc = f"{current_config['topic']}\n\n" + " ".join(f"#{t}" for t in hashtags)
-            title = current_config["topic"][:100]
-            video_id = upload_youtube(
-                processed_path, title, desc, hashtags,
-                current_config.get("privacy", "private")
-            )
+            pipeline_status["progress"] = 80
+            video_id = upload_to_youtube(processed_path, thumb_path, metadata, current_config)
 
             pipeline_status["step"] = "Moving to archive..."
             pipeline_status["progress"] = 90
@@ -225,13 +461,17 @@ def run_pipeline():
 
             history["processed_ids"].append(video["id"])
             history["posted"].append({
-                "file": video["name"], "video_id": video_id,
-                "date": today, "topic": current_config["topic"]
+                "file":     video["name"],
+                "video_id": video_id,
+                "date":     today,
+                "topic":    current_config["topic"],
+                "type":     video_type,
+                "title":    metadata.get("yt_title", "")
             })
             save_history(history)
 
             pipeline_status["videos_posted"] += 1
-            pipeline_status["step"] = f"Done! YouTube ID: {video_id}"
+            pipeline_status["step"]     = f"Done! https://youtube.com/watch?v={video_id}"
             pipeline_status["progress"] = 100
             pipeline_status["last_run"] = datetime.now().isoformat()
 
@@ -257,8 +497,8 @@ def index():
 
 @app.route("/chat", methods=["POST"])
 def chat():
-    data = request.json
-    msgs = data.get("messages", [])
+    data     = request.json
+    msgs     = data.get("messages", [])
     response = client.messages.create(
         model="claude-sonnet-4-6", max_tokens=800,
         system=SYSTEM, messages=msgs
@@ -279,15 +519,16 @@ def set_config():
 
 @app.route("/pipeline/status", methods=["GET"])
 def pipeline_status_route():
-    history = load_history()
-    today = datetime.now().date().isoformat()
+    history     = load_history()
+    today       = datetime.now().date().isoformat()
     posted_today = len([p for p in history["posted"] if p.get("date") == today])
     return jsonify({
         **pipeline_status,
         "posted_today": posted_today,
-        "max_per_day": current_config.get("posts_per_day", 3),
-        "topic": current_config.get("topic", ""),
-        "active": current_config.get("active", False)
+        "max_per_day":  current_config.get("posts_per_day", 3),
+        "topic":        current_config.get("topic", ""),
+        "video_type":   current_config.get("video_type", "shorts"),
+        "active":       current_config.get("active", False)
     })
 
 @app.route("/pipeline/run", methods=["POST"])
