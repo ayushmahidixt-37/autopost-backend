@@ -11,3 +11,4 @@ feedparser
 flask
 flask-cors
 gspread
+ffmpeg-python
