@@ -278,8 +278,8 @@ function showConfirm(cfg){
     <span style="font-size:11px;color:#4A5568;text-transform:uppercase;flex-shrink:0">${k}</span>
     <span style="font-size:13px;font-weight:600;text-align:right">${v}</span></div>`).join("");
   document.getElementById("ccard").style.display="block";
-  // Sync video type from AI response
-  if(cfg.video_type) setType(cfg.video_type);
+  // Use current tab selection, not AI response
+  // (Tab already selected by user - shorts or regular)
 }
 
 function doConfirm(){
@@ -288,13 +288,15 @@ function doConfirm(){
   document.getElementById("abar").style.display="flex";
   document.getElementById("atopic").textContent=active.topic;
   document.getElementById("atype-label").textContent=
-    active.video_type==="shorts"?"ACTIVE ⚡ SHORTS":"ACTIVE 🎥 REGULAR";
+    videoType==="shorts"?"ACTIVE ⚡ SHORTS":"ACTIVE 🎥 REGULAR";
   document.getElementById("live").style.display="block";
   document.getElementById("hsub").textContent="● "+active.topic.slice(0,28);
   document.getElementById("pipeline").style.display="block";
 
+  // Always use tab-selected type, not AI suggestion
+  const finalConfig = {...active, video_type: videoType, active: true};
   fetch("/config",{method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({...active,video_type:videoType,active:true})});
+    body:JSON.stringify(finalConfig)});
 
   const typeLabel = videoType==="shorts" ? "⚡ Shorts (20s, 9:16)" : "🎥 Regular Video (16:9)";
   addMsg("assistant",
@@ -405,7 +407,7 @@ function checkStatus(){
 setInterval(checkStatus,5000);
 
 // ── INIT ──
-addMsg("assistant","Namaste! 👋\n\nPehle video type choose karo:\n⚡ SHORTS — 20 seconds, vertical\n🎥 REGULAR — full video, horizontal\n\nPhir topic bolo — Claude video analyze karke captions, thumbnail sab generate karega! 🎯");
+addMsg("assistant","Namaste! 👋\n\nUpar SHORTS ya REGULAR tab select karo — phir topic bolo!\n\nClaude video analyze karke automatically:\n• Captions generate karega\n• Thumbnail banayega  \n• Watermark add karega\n\nDrive raw_videos mein video daalo — auto post hogi! 🎯");
 </script>
 </body>
 </html>

@@ -289,39 +289,52 @@ def generate_thumbnail(metadata, video_type, output_path):
 # ── VIDEO PROCESSING ─────────────────────────
 def process_video(input_path, output_path, metadata, video_type):
     """Add overlays: banner, caption, watermark. Resize for type."""
-    caption    = metadata.get("caption", "").upper()[:50]
-    banner     = metadata.get("banner_text", "").upper()[:40]
-    channel    = YT_CHANNEL
+    # Get text values and sanitize for FFmpeg
+    caption = metadata.get("caption", "VIDEO").upper()
+    banner  = metadata.get("banner_text", "AUTOPOST").upper()
+    channel = YT_CHANNEL
     
+    # FFmpeg drawtext needs special chars escaped
     def esc(s):
-        return s.replace("'","").replace(":","").replace("[","").replace("]","")
+        s = s[:50]  # limit length
+        s = s.replace("\\", "")
+        s = s.replace("'", "")
+        s = s.replace('"', "")
+        s = s.replace(":", " ")
+        s = s.replace("[", "")
+        s = s.replace("]", "")
+        s = s.replace("{", "")
+        s = s.replace("}", "")
+        s = s.replace("%", "")
+        s = s.replace("\n", " ")
+        return s.strip()
+    
+    cap = esc(caption)
+    ban = esc(banner)
+    cha = esc(channel)
     
     font = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
     
     if video_type == "shorts":
-        # Vertical 9:16, max 20 seconds
         scale_filter = "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920"
-        fontsize_caption = 38
-        fontsize_banner  = 26
-        fontsize_channel = 22
+        fs_cap = 38
+        fs_ban = 26
+        fs_cha = 22
     else:
-        # Horizontal 16:9
         scale_filter = "scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080"
-        fontsize_caption = 48
-        fontsize_banner  = 32
-        fontsize_channel = 28
+        fs_cap = 48
+        fs_ban = 32
+        fs_cha = 28
     
-    vf = ",".join([
+    # Build filter as a list then join — avoids f-string escaping issues
+    filters = [
         scale_filter,
-        # Yellow banner top
         "drawbox=x=0:y=0:w=iw:h=72:color=#F5C518@0.92:t=fill",
-        # Banner text
-        f"drawtext=text='{esc(banner)}':fontfile={font}:fontsize={fontsize_banner}:fontcolor=black:x=(w-text_w)/2:y=22",
-        # Caption bottom
-        f"drawtext=text='{esc(caption)}':fontfile={font}:fontsize={fontsize_caption}:fontcolor=white:borderw=3:bordercolor=black:x=(w-text_w)/2:y=h-120",
-        # Watermark
-        f"drawtext=text='{esc(channel)}':fontfile={font}:fontsize={fontsize_channel}:fontcolor=white@0.65:x=w-text_w-18:y=h-44",
-    ])
+        "drawtext=text='" + ban + "':fontfile=" + font + ":fontsize=" + str(fs_ban) + ":fontcolor=black:x=(w-text_w)/2:y=22",
+        "drawtext=text='" + cap + "':fontfile=" + font + ":fontsize=" + str(fs_cap) + ":fontcolor=white:borderw=3:bordercolor=black:x=(w-text_w)/2:y=h-120",
+        "drawtext=text='" + cha + "':fontfile=" + font + ":fontsize=" + str(fs_cha) + ":fontcolor=white@0.65:x=w-text_w-18:y=h-44",
+    ]
+    vf = ",".join(filters)
     
     cmd = [
         "ffmpeg", "-y", "-i", input_path,
