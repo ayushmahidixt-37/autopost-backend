@@ -119,7 +119,7 @@ def add_overlays(input_path, output_path, caption, topic):
     result = subprocess.run([
         "ffmpeg", "-y", "-i", input_path,
         "-vf", vf,
-        "-c:v", "libx264", "-preset", "fast",
+        "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
         "-c:a", "copy", output_path
     ], capture_output=True, text=True)
     if result.returncode != 0:
