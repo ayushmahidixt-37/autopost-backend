@@ -21,14 +21,20 @@ ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 GOOGLE_TOKEN  = os.environ.get("GOOGLE_TOKEN", "")
 DRIVE_FOLDER  = os.environ.get("DRIVE_FOLDER", "raw_videos")
 YT_CHANNEL    = os.environ.get("YOUTUBE_CHANNEL", "@YourChannel")
+ROOT_FOLDER   = DRIVE_FOLDER  # root folder containing channel subfolders
 
 client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
 
 current_config = {
     "topic": "", "channel": "", "posts_per_day": 3,
     "privacy": "private", "active": False,
-    "video_type": "shorts",  # "shorts" or "regular"
-    "caption": "", "hashtags": []
+    "video_type": "shorts",
+    "caption": "", "hashtags": [],
+    "channel_folder": "",     # subfolder name inside raw_videos/
+    "show_banner": False,
+    "show_caption": False,
+    "show_watermark": True,
+    "banner_position": 80,
 }
 
 pipeline_status = {
@@ -71,8 +77,38 @@ def get_folder_id(drive, folder_name):
     ).execute()
     files = res.get("files", [])
     if not files:
-        raise Exception(f"Folder '{folder_name}' not found in Drive")
+        # Create it at root level
+        meta = {"name": folder_name, "mimeType": "application/vnd.google-apps.folder"}
+        folder = drive.files().create(body=meta, fields="id").execute()
+        return folder["id"]
     return files[0]["id"]
+
+def get_or_create_subfolder(drive, name, parent_id):
+    """Get or create a subfolder inside a parent."""
+    q = "'" + parent_id + "' in parents and name='" + name + "' and mimeType='application/vnd.google-apps.folder' and trashed=false"
+    res = drive.files().list(q=q, fields="files(id,name)").execute()
+    if res.get("files"):
+        return res["files"][0]["id"]
+    meta = {"name": name, "mimeType": "application/vnd.google-apps.folder", "parents": [parent_id]}
+    return drive.files().create(body=meta, fields="id").execute()["id"]
+
+def list_channel_folders(drive):
+    """List subfolders inside raw_videos/ — each is a channel."""
+    root_id = get_folder_id(drive, ROOT_FOLDER)
+    q = "'" + root_id + "' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false and name != 'archive'"
+    res = drive.files().list(q=q, fields="files(id,name)").execute()
+    return res.get("files", [])
+
+def delete_old_archive(drive, channel_folder_id, days=3):
+    """Delete archive files older than N days."""
+    from datetime import timedelta
+    archive_id = get_or_create_subfolder(drive, "archive", channel_folder_id)
+    cutoff = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    q = "'" + archive_id + "' in parents and trashed=false and createdTime < '" + cutoff + "'"
+    res = drive.files().list(q=q, fields="files(id,name)").execute()
+    for f in res.get("files", []):
+        drive.files().delete(fileId=f["id"]).execute()
+        print(f"Auto-deleted from archive: {f['name']}")
 
 def list_videos(drive, folder_id, processed_ids):
     res = drive.files().list(
@@ -90,20 +126,16 @@ def download_video(drive, file_id, dest_path):
         while not done:
             _, done = downloader.next_chunk()
 
-def move_to_archive(drive, file_id, folder_id):
-    archive_name = "archive_videos"
-    try:
-        archive_id = get_folder_id(drive, archive_name)
-    except:
-        meta = {"name": archive_name, "mimeType": "application/vnd.google-apps.folder"}
-        archive = drive.files().create(body=meta, fields="id").execute()
-        archive_id = archive["id"]
+def move_to_archive(drive, file_id, parent_folder_id):
+    """Move file to archive/ inside the channel folder. Delete after 3 days."""
+    archive_id = get_or_create_subfolder(drive, "archive", parent_folder_id)
     drive.files().update(
         fileId=file_id,
         addParents=archive_id,
-        removeParents=folder_id,
+        removeParents=parent_folder_id,
         fields="id,parents"
     ).execute()
+    print(f"Moved to archive")
 
 # ── CLAUDE VIDEO ANALYSIS ────────────────────
 def extract_frames(video_path, num_frames=3):
@@ -288,52 +320,44 @@ def generate_thumbnail(metadata, video_type, output_path):
 
 # ── VIDEO PROCESSING ─────────────────────────
 def process_video(input_path, output_path, metadata, video_type):
-    """Add overlays: banner, caption, watermark. Resize for type."""
-    # Get text values and sanitize for FFmpeg
-    caption = metadata.get("caption", "VIDEO").upper()
-    banner  = metadata.get("banner_text", "AUTOPOST").upper()
-    channel = YT_CHANNEL
-    
-    # FFmpeg drawtext needs special chars escaped
+    """Add overlays based on frontend toggle settings."""
+
+    # Read toggle settings from current_config
+    show_banner    = current_config.get("show_banner", False)
+    show_caption   = current_config.get("show_caption", False)
+    show_watermark = current_config.get("show_watermark", True)
+    banner_pos     = current_config.get("banner_position", 80)
+
     def esc(s):
-        s = s[:50]  # limit length
-        s = s.replace("\\", "")
-        s = s.replace("'", "")
-        s = s.replace('"', "")
-        s = s.replace(":", " ")
-        s = s.replace("[", "")
-        s = s.replace("]", "")
-        s = s.replace("{", "")
-        s = s.replace("}", "")
-        s = s.replace("%", "")
-        s = s.replace("\n", " ")
+        s = str(s)[:55]
+        for ch in ["'", '"', "\\", ":", "[", "]", "{", "}", "%", "\n"]:
+            s = s.replace(ch, " ")
         return s.strip()
-    
-    cap = esc(caption)
-    ban = esc(banner)
-    cha = esc(channel)
-    
-    font = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-    
+
+    caption = esc(metadata.get("caption", "").upper())
+    banner  = esc(metadata.get("banner_text", "").upper())
+    channel = esc(YT_CHANNEL)
+    font    = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+
     if video_type == "shorts":
         scale_filter = "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920"
-        fs_cap = 38
-        fs_ban = 26
-        fs_cha = 22
+        fs_cap, fs_ban, fs_cha = 38, 26, 22
     else:
         scale_filter = "scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080"
-        fs_cap = 48
-        fs_ban = 32
-        fs_cha = 28
-    
-    # Build filter as a list then join — avoids f-string escaping issues
-    filters = [
-        scale_filter,
-        "drawbox=x=0:y=0:w=iw:h=72:color=#F5C518@0.92:t=fill",
-        "drawtext=text='" + ban + "':fontfile=" + font + ":fontsize=" + str(fs_ban) + ":fontcolor=black:x=(w-text_w)/2:y=22",
-        "drawtext=text='" + cap + "':fontfile=" + font + ":fontsize=" + str(fs_cap) + ":fontcolor=white:borderw=3:bordercolor=black:x=(w-text_w)/2:y=h-120",
-        "drawtext=text='" + cha + "':fontfile=" + font + ":fontsize=" + str(fs_cha) + ":fontcolor=white@0.65:x=w-text_w-18:y=h-44",
-    ]
+        fs_cap, fs_ban, fs_cha = 48, 32, 28
+
+    filters = [scale_filter]
+
+    if show_banner and banner:
+        filters.append("drawbox=x=0:y=" + str(banner_pos) + ":w=iw:h=70:color=#F5C518@0.90:t=fill")
+        filters.append("drawtext=text='" + banner + "':fontfile=" + font + ":fontsize=" + str(fs_ban) + ":fontcolor=black:x=(w-text_w)/2:y=" + str(banner_pos + 18))
+
+    if show_caption and caption:
+        filters.append("drawtext=text='" + caption + "':fontfile=" + font + ":fontsize=" + str(fs_cap) + ":fontcolor=white:borderw=3:bordercolor=black:x=(w-text_w)/2:y=h-130")
+
+    if show_watermark and channel:
+        filters.append("drawtext=text='" + channel + "':fontfile=" + font + ":fontsize=" + str(fs_cha) + ":fontcolor=white@0.65:x=w-text_w-18:y=h-44")
+
     vf = ",".join(filters)
     
     cmd = [
@@ -552,6 +576,15 @@ def trigger_pipeline():
 @app.route("/history", methods=["GET"])
 def get_history():
     return jsonify(load_history())
+
+@app.route("/channels", methods=["GET"])
+def get_channels():
+    try:
+        drive = get_drive()
+        folders = list_channel_folders(drive)
+        return jsonify({"channels": [f["name"] for f in folders]})
+    except Exception as e:
+        return jsonify({"channels": [], "error": str(e)})
 
 @app.route("/status", methods=["GET"])
 def status():
