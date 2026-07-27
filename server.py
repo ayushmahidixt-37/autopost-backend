@@ -353,6 +353,48 @@ def generate_thumbnail(metadata, video_type, output_path):
     return output_path
 
 # ── VIDEO PROCESSING ─────────────────────────
+def generate_subtitles(video_path, subtitle_path):
+    """
+    Use Whisper to transcribe speech and generate SRT subtitle file.
+    Returns True if subtitles were generated, False if no speech found.
+    """
+    try:
+        import whisper
+        model = whisper.load_model("tiny")  # tiny = fast, good enough for captions
+        result = model.transcribe(video_path, word_timestamps=False)
+        
+        segments = result.get("segments", [])
+        if not segments:
+            print("Whisper: No speech detected")
+            return False
+        
+        # Write SRT file
+        with open(subtitle_path, "w", encoding="utf-8") as f:
+            for i, seg in enumerate(segments, 1):
+                start = seg["start"]
+                end   = seg["end"]
+                text  = seg["text"].strip()
+                if not text:
+                    continue
+                # SRT format: HH:MM:SS,mmm
+                def fmt(t):
+                    h = int(t // 3600)
+                    m = int((t % 3600) // 60)
+                    s = int(t % 60)
+                    ms = int((t - int(t)) * 1000)
+                    return f"{h:02}:{m:02}:{s:02},{ms:03}"
+                f.write(f"{i}\n{fmt(start)} --> {fmt(end)}\n{text}\n\n")
+        
+        print(f"Subtitles generated: {len(segments)} segments")
+        return True
+    except ImportError:
+        print("Whisper not installed — installing...")
+        sp.run(["pip", "install", "openai-whisper", "-q"], capture_output=True)
+        return False
+    except Exception as e:
+        print(f"Subtitle generation error: {e}")
+        return False
+
 def process_video(input_path, output_path, metadata, video_type):
     """Add overlays based on toggle settings."""
     show_banner    = current_config.get("show_banner", False)
@@ -361,8 +403,8 @@ def process_video(input_path, output_path, metadata, video_type):
     banner_pos     = current_config.get("banner_position", 80)
 
     def esc(s):
-        s = str(s)[:55]
-        for ch in ["'", '"', ":", "[", "]", "{", "}", "%"]:
+        s = str(s)[:60]
+        for ch in ["'", '"', ":", "[", "]", "{", "}", "%", "\\"]:
             s = s.replace(ch, " ")
         return s.strip()
 
@@ -373,25 +415,65 @@ def process_video(input_path, output_path, metadata, video_type):
 
     if video_type == "shorts":
         scale_filter = "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920"
-        fs_cap, fs_ban, fs_cha = 38, 26, 22
+        fs_cap = 42   # bigger caption
+        fs_ban = 30   # bigger banner
+        fs_cha = 28   # bigger watermark
     else:
         scale_filter = "scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080"
-        fs_cap, fs_ban, fs_cha = 48, 32, 28
+        fs_cap = 52
+        fs_ban = 36
+        fs_cha = 34
 
     filters = [scale_filter]
 
+    # BANNER — bold style with dark semi-transparent background
     if show_banner and banner:
-        filters.append("drawbox=x=0:y=" + str(banner_pos) + ":w=iw:h=70:color=#F5C518@0.90:t=fill")
-        filters.append("drawtext=text='" + banner + "':fontfile=" + font + ":fontsize=" + str(fs_ban) + ":fontcolor=black:x=(w-text_w)/2:y=" + str(banner_pos + 18))
+        bpos = int(banner_pos)
+        # Dark bg behind banner text for readability
+        filters.append("drawbox=x=0:y=" + str(bpos) + ":w=iw:h=80:color=black@0.55:t=fill")
+        # Accent left bar
+        filters.append("drawbox=x=0:y=" + str(bpos) + ":w=8:h=80:color=#00E5CC@1:t=fill")
+        # Banner text — white, bold, left-aligned with padding
+        filters.append(
+            "drawtext=text='" + banner + "':fontfile=" + font +
+            ":fontsize=" + str(fs_ban) +
+            ":fontcolor=white:x=24:y=" + str(bpos + 22)
+        )
 
-    if show_caption and caption:
-        filters.append("drawtext=text='" + caption + "':fontfile=" + font + ":fontsize=" + str(fs_cap) + ":fontcolor=white:borderw=3:bordercolor=black:x=(w-text_w)/2:y=h-130")
+    # SUBTITLES — Whisper AI generated, sync with speech
+    subtitle_path = input_path + ".srt"
+    subtitle_added = False
+    
+    if show_caption:
+        print("Generating subtitles with Whisper...")
+        has_subs = generate_subtitles(input_path, subtitle_path)
+        if has_subs and os.path.exists(subtitle_path):
+            subtitle_added = True
+            print("Subtitles will be burned in")
+        else:
+            print("No subtitles — no speech or generation failed")
 
+    # WATERMARK — bottom center, slightly below middle-bottom, bold & visible
     if show_watermark and channel:
-        filters.append("drawtext=text='" + channel + "':fontfile=" + font + ":fontsize=" + str(fs_cha) + ":fontcolor=white@0.65:x=w-text_w-18:y=h-44")
+        # Position: horizontally centered, at 80% of height (below center, above caption)
+        filters.append("drawbox=x=(w-text_w)/2-20:y=h*4/5-20:w=text_w+40:h=" + str(fs_cha+24) + ":color=black@0.45:t=fill")
+        filters.append(
+            "drawtext=text='" + channel + "':fontfile=" + font +
+            ":fontsize=" + str(fs_cha) +
+            ":fontcolor=white@0.90:borderw=2:bordercolor=black@0.7" +
+            ":x=(w-text_w)/2:y=h*4/5"
+        )
 
     vf = ",".join(filters)
     
+    # Build final FFmpeg command
+    # If subtitles exist, add subtitle filter
+    if subtitle_added:
+        # Escape subtitle path for FFmpeg
+        sub_path_esc = subtitle_path.replace("\\", "/").replace(":", "\\:")
+        subtitle_filter = "subtitles='" + sub_path_esc + "':force_style='FontName=DejaVu Sans Bold,FontSize=" + str(fs_cap) + ",PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=3,Shadow=1,Alignment=2,MarginV=60'"
+        vf = vf + "," + subtitle_filter
+
     cmd = [
         "ffmpeg", "-y", "-i", input_path,
         "-vf", vf,
@@ -406,6 +488,11 @@ def process_video(input_path, output_path, metadata, video_type):
     cmd.append(output_path)
     
     result = sp.run(cmd, capture_output=True, text=True)
+    
+    # Cleanup subtitle file
+    if os.path.exists(subtitle_path):
+        os.remove(subtitle_path)
+    
     if result.returncode != 0:
         raise Exception(f"FFmpeg failed: {result.stderr[-300:]}")
 
