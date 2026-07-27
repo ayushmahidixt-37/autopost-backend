@@ -25,17 +25,37 @@ ROOT_FOLDER   = DRIVE_FOLDER  # root folder containing channel subfolders
 
 client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
 
-current_config = {
-    "topic": "", "channel": "", "posts_per_day": 3,
-    "privacy": "private", "active": False,
-    "video_type": "shorts",
-    "caption": "", "hashtags": [],
-    "channel_folder": "",     # subfolder name inside raw_videos/
-    "show_banner": False,
-    "show_caption": False,
-    "show_watermark": True,
-    "banner_position": 80,
-}
+CONFIG_FILE = "/app/config.json"
+
+def load_config():
+    default = {
+        "topic": "", "channel": "", "posts_per_day": 3,
+        "privacy": "private", "active": False,
+        "video_type": "shorts",
+        "caption": "", "hashtags": [],
+        "channel_folder": "",
+        "show_banner": False,
+        "show_caption": False,
+        "show_watermark": True,
+        "banner_position": 80,
+    }
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE) as f:
+                saved = json.load(f)
+                default.update(saved)
+        except:
+            pass
+    return default
+
+def save_config(cfg):
+    try:
+        with open(CONFIG_FILE, "w") as f:
+            json.dump(cfg, f, indent=2)
+    except:
+        pass
+
+current_config = load_config()
 
 pipeline_status = {
     "running": False, "step": "", "progress": 0,
