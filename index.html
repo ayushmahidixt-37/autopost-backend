@@ -356,17 +356,24 @@ async function postNow() {
 let pollTimer = null;
 function pollStatus() {
   if (pollTimer) clearInterval(pollTimer);
+  let doneCount = 0;
   pollTimer = setInterval(async () => {
     try {
       const r = await fetch("/pipeline/status");
       const data = await r.json();
       updateProgress(data);
-      if (!data.running && data.progress >= 100) {
-        clearInterval(pollTimer);
-        onDone(data);
-      } else if (!data.running && data.last_error) {
-        clearInterval(pollTimer);
-        onError(data);
+      if (!data.running) {
+        doneCount++;
+        if (doneCount >= 2) {  // confirm twice before stopping
+          clearInterval(pollTimer);
+          if (data.last_error) {
+            onError(data);
+          } else {
+            onDone(data);
+          }
+        }
+      } else {
+        doneCount = 0;
       }
     } catch(e) {}
   }, 2000);
