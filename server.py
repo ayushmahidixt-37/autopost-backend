@@ -473,8 +473,23 @@ def run_pipeline():
 
         pipeline_status["step"] = "Connecting to Drive..."
         pipeline_status["progress"] = 10
-        drive     = get_drive()
-        folder_id = get_folder_id(drive, DRIVE_FOLDER)
+        drive = get_drive()
+
+        # Use channel subfolder if specified, else auto-pick first available
+        channel_name = current_config.get("channel_folder", "")
+        if not channel_name:
+            folders = list_channel_folders(drive)
+            if folders:
+                channel_name = folders[0]["name"]
+                current_config["channel_folder"] = channel_name
+                print(f"Auto-selected channel: {channel_name}")
+
+        if channel_name:
+            root_id = get_folder_id(drive, ROOT_FOLDER)
+            folder_id = get_or_create_subfolder(drive, channel_name, root_id)
+            delete_old_archive(drive, folder_id, days=3)
+        else:
+            folder_id = get_folder_id(drive, DRIVE_FOLDER)
 
         pipeline_status["step"] = "Finding new videos..."
         pipeline_status["progress"] = 20
