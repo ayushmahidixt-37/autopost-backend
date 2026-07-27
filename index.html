@@ -274,7 +274,12 @@ async function loadChannels() {
       if (ch === cur || data.channels.length === 1) o.selected = true;
       sel.appendChild(o);
     });
-    if (data.channels && data.channels.length === 1) {
+    // Auto-select if only one channel or restore previous
+    const selVal = document.getElementById("channel-sel").value;
+    if (selVal) {
+      onChannelChange(selVal);
+    } else if (data.channels && data.channels.length === 1) {
+      document.getElementById("channel-sel").value = data.channels[0];
       onChannelChange(data.channels[0]);
     }
   } catch(e) {
@@ -319,6 +324,10 @@ function setPrivacy(val) {
 
 // ── POST NOW ──
 async function postNow() {
+  // Re-read channel from dropdown in case config not synced
+  const selVal = document.getElementById("channel-sel").value;
+  if (selVal) cfg.channel_folder = selVal;
+  
   if (!cfg.channel_folder) {
     alert("Pehle channel select karo!");
     return;
