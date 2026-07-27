@@ -24,6 +24,63 @@ YT_CHANNEL    = os.environ.get("YOUTUBE_CHANNEL", "@YourChannel")
 
 client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
 
+# ── MULTI-CHANNEL SUPPORT ──────────────────────
+# Add new channels by adding Railway variables:
+#   CHANNEL_2_NAME = MyNewChannel
+#   CHANNEL_2_TOKEN = {json token}
+# No code changes needed!
+
+def load_all_channels():
+    """Auto-discover all CHANNEL_N_NAME/TOKEN pairs from env vars."""
+    channels = {}
+    
+    # Always include the default channel
+    if GOOGLE_TOKEN and YT_CHANNEL:
+        name = YT_CHANNEL.replace("@","")
+        channels[name] = {
+            "name": name,
+            "token": GOOGLE_TOKEN,
+            "drive_folder": DRIVE_FOLDER,
+        }
+    
+    # Discover additional channels from env vars
+    i = 1
+    while True:
+        name = os.environ.get(f"CHANNEL_{i}_NAME", "")
+        token = os.environ.get(f"CHANNEL_{i}_TOKEN", "")
+        if not name or not token:
+            break
+        folder = os.environ.get(f"CHANNEL_{i}_DRIVE", name)
+        channels[name] = {
+            "name": name,
+            "token": token,
+            "drive_folder": folder,
+        }
+        i += 1
+    
+    return channels
+
+ALL_CHANNELS = load_all_channels()
+
+def get_channel_credentials(channel_name):
+    """Get Google credentials for a specific channel."""
+    ch = ALL_CHANNELS.get(channel_name)
+    if not ch:
+        # Fallback to default
+        token = GOOGLE_TOKEN
+    else:
+        token = ch["token"]
+    creds = Credentials.from_authorized_user_info(json.loads(token))
+    if creds.expired and creds.refresh_token:
+        creds.refresh(Request())
+    return creds
+
+def get_channel_drive(channel_name):
+    return build("drive", "v3", credentials=get_channel_credentials(channel_name))
+
+def get_channel_youtube(channel_name):
+    return build("youtube", "v3", credentials=get_channel_credentials(channel_name))
+
 current_config = {
     "topic": "", "channel": "", "posts_per_day": 3,
     "privacy": "private", "active": False,
@@ -486,12 +543,25 @@ def run_pipeline():
 
             history["processed_ids"].append(video["id"])
             history["posted"].append({
-                "file":     video["name"],
-                "video_id": video_id,
-                "date":     today,
-                "topic":    current_config["topic"],
-                "type":     video_type,
-                "title":    metadata.get("yt_title", "")
+                "file":          video["name"],
+                "video_id":      video_id,
+                "date":          today,
+                "posted_at":     datetime.now().strftime("%H:%M"),
+                "channel":       current_config.get("channel_folder", ""),
+                "topic":         current_config.get("topic", ""),
+                "type":          video_type,
+                "title":         metadata.get("yt_title", ""),
+                "caption":       metadata.get("caption", ""),
+                "caption_style": "curiosity-gap",
+                "hashtags":      metadata.get("hashtags", []),
+                "banner_on":     current_config.get("show_banner", False),
+                "caption_on":    current_config.get("show_caption", False),
+                # Analytics fields — filled later by analytics scheduler
+                "views_3d":      None,
+                "watch_pct":     None,
+                "likes":         None,
+                "subs_gained":   None,
+                "analytics_fetched": False,
             })
             save_history(history)
 
@@ -507,10 +577,125 @@ def run_pipeline():
         pipeline_status["running"] = False
 
 # ── SCHEDULER ────────────────────────────────
+def fetch_video_analytics(video_id, channel_name):
+    """Fetch YouTube Analytics for a video posted 3+ days ago."""
+    try:
+        creds = get_channel_credentials(channel_name)
+        yt_analytics = build("youtubeAnalytics", "v2", credentials=creds)
+        from datetime import timedelta
+        end_date = datetime.now().date().isoformat()
+        start_date = (datetime.now().date() - timedelta(days=30)).isoformat()
+        result = yt_analytics.reports().query(
+            ids="channel==MINE",
+            startDate=start_date,
+            endDate=end_date,
+            metrics="views,averageViewPercentage,likes,subscribersGained",
+            filters=f"video=={video_id}"
+        ).execute()
+        rows = result.get("rows", [])
+        if rows:
+            return {
+                "views_3d":    int(rows[0][0]),
+                "watch_pct":   round(rows[0][1], 1),
+                "likes":       int(rows[0][2]),
+                "subs_gained": int(rows[0][3]),
+            }
+    except Exception as e:
+        print(f"Analytics fetch error: {e}")
+    return None
+
+def run_analytics_update():
+    """Fetch analytics for videos posted 3+ days ago that haven't been fetched."""
+    from datetime import timedelta
+    history = load_history()
+    updated = False
+    cutoff = (datetime.now().date() - timedelta(days=3)).isoformat()
+    
+    for entry in history["posted"]:
+        if entry.get("analytics_fetched"):
+            continue
+        if entry.get("date", "9999") > cutoff:
+            continue  # Too recent
+        if not entry.get("video_id"):
+            continue
+        
+        channel = entry.get("channel", list(ALL_CHANNELS.keys())[0] if ALL_CHANNELS else "")
+        stats = fetch_video_analytics(entry["video_id"], channel)
+        if stats:
+            entry.update(stats)
+            entry["analytics_fetched"] = True
+            updated = True
+            print(f"Analytics updated: {entry['title']} — {stats['views_3d']} views")
+    
+    if updated:
+        save_history(history)
+
+def generate_growth_recommendations(channel_name):
+    """Claude analyzes performance data and gives recommendations."""
+    history = load_history()
+    channel_posts = [p for p in history["posted"] 
+                     if p.get("channel") == channel_name and p.get("analytics_fetched")]
+    
+    if len(channel_posts) < 2:
+        return "Abhi enough data nahi hai. 3+ videos post karo aur 3 din baad analytics aa jaayegi."
+    
+    # Build performance summary
+    summary = []
+    for p in channel_posts[-10:]:  # Last 10 videos
+        summary.append({
+            "title": p.get("title",""),
+            "type": p.get("type",""),
+            "caption": p.get("caption",""),
+            "hashtags": p.get("hashtags",[])[:3],
+            "posted_at": p.get("posted_at",""),
+            "views": p.get("views_3d", 0),
+            "watch_pct": p.get("watch_pct", 0),
+            "likes": p.get("likes", 0),
+            "subs": p.get("subs_gained", 0),
+        })
+    
+    prompt = f"""YouTube channel analytics data for channel: {channel_name}
+
+Recent video performance:
+{json.dumps(summary, indent=2)}
+
+Analyze this data and provide:
+1. Which video TYPE (Shorts/Regular) is performing better and why
+2. Which CAPTION STYLE is getting more views/watch time
+3. Which HASHTAGS are working best
+4. Best POSTING TIME based on data
+5. Top 3 specific actionable recommendations for next videos
+6. Suggested caption style and hashtags to use NEXT TIME
+
+Be specific. Use numbers from the data. Reply in Hindi/English mix.
+Format as JSON:
+{{
+  "best_type": "shorts/regular",
+  "best_caption_style": "...",
+  "best_hashtags": ["tag1","tag2","tag3"],
+  "best_time": "HH:MM",
+  "recommendations": ["rec1","rec2","rec3"],
+  "next_caption_hint": "...",
+  "summary": "2-3 line overall summary"
+}}"""
+
+    response = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=1000,
+        messages=[{"role": "user", "content": prompt}]
+    )
+    raw = response.content[0].text.strip().replace("```json","").replace("```","").strip()
+    try:
+        return json.loads(raw)
+    except:
+        return {"summary": raw}
+
 def scheduler():
     schedule.every().day.at("09:00").do(run_pipeline)
     schedule.every().day.at("13:00").do(run_pipeline)
     schedule.every().day.at("18:00").do(run_pipeline)
+    # Check analytics every day at 10am
+    schedule.every().day.at("10:00").do(run_analytics_update)
     while True:
         schedule.run_pending()
         time.sleep(60)
@@ -575,6 +760,53 @@ def get_channels():
         return jsonify({"channels": [f["name"] for f in folders]})
     except Exception as e:
         return jsonify({"channels": [], "error": str(e)})
+
+@app.route("/analytics/<channel_name>", methods=["GET"])
+def get_analytics(channel_name):
+    """Return performance data + Claude recommendations for a channel."""
+    history = load_history()
+    posts = [p for p in history["posted"] if p.get("channel") == channel_name]
+    
+    # Summary stats
+    total_views = sum(p.get("views_3d", 0) or 0 for p in posts)
+    total_videos = len(posts)
+    shorts = [p for p in posts if p.get("type") == "shorts"]
+    regular = [p for p in posts if p.get("type") == "regular"]
+    
+    def avg_views(lst):
+        v = [p.get("views_3d", 0) or 0 for p in lst]
+        return round(sum(v)/len(v)) if v else 0
+    
+    best_video = max(posts, key=lambda p: p.get("views_3d", 0) or 0) if posts else None
+    
+    return jsonify({
+        "channel": channel_name,
+        "total_videos": total_videos,
+        "total_views": total_views,
+        "avg_views": round(total_views / total_videos) if total_videos else 0,
+        "shorts_avg": avg_views(shorts),
+        "regular_avg": avg_views(regular),
+        "best_video": best_video,
+        "recent": posts[-5:][::-1],
+        "all_videos": posts[::-1],
+    })
+
+@app.route("/analytics/<channel_name>/recommend", methods=["GET"])
+def get_recommendations(channel_name):
+    """Claude analyzes data and gives growth recommendations."""
+    recs = generate_growth_recommendations(channel_name)
+    return jsonify(recs)
+
+@app.route("/analytics/refresh", methods=["POST"])
+def refresh_analytics():
+    """Manually trigger analytics fetch."""
+    threading.Thread(target=run_analytics_update, daemon=True).start()
+    return jsonify({"status": "started"})
+
+@app.route("/channels/all", methods=["GET"])
+def get_all_channels():
+    """Return all configured channels."""
+    return jsonify({"channels": list(ALL_CHANNELS.keys())})
 
 @app.route("/status", methods=["GET"])
 def status():
