@@ -21,41 +21,20 @@ ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 GOOGLE_TOKEN  = os.environ.get("GOOGLE_TOKEN", "")
 DRIVE_FOLDER  = os.environ.get("DRIVE_FOLDER", "raw_videos")
 YT_CHANNEL    = os.environ.get("YOUTUBE_CHANNEL", "@YourChannel")
-ROOT_FOLDER   = DRIVE_FOLDER  # root folder containing channel subfolders
 
 client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
 
-CONFIG_FILE = "/app/config.json"
-
-def load_config():
-    default = {
-        "topic": "", "channel": "", "posts_per_day": 3,
-        "privacy": "private", "active": False,
-        "video_type": "shorts",
-        "caption": "", "hashtags": [],
-        "channel_folder": "",
-        "show_banner": False,
-        "show_caption": False,
-        "show_watermark": True,
-        "banner_position": 80,
-    }
-    if os.path.exists(CONFIG_FILE):
-        try:
-            with open(CONFIG_FILE) as f:
-                saved = json.load(f)
-                default.update(saved)
-        except:
-            pass
-    return default
-
-def save_config(cfg):
-    try:
-        with open(CONFIG_FILE, "w") as f:
-            json.dump(cfg, f, indent=2)
-    except:
-        pass
-
-current_config = load_config()
+current_config = {
+    "topic": "", "channel": "", "posts_per_day": 3,
+    "privacy": "private", "active": False,
+    "video_type": "shorts",
+    "caption": "", "hashtags": [],
+    "channel_folder": "",
+    "show_banner": False,
+    "show_caption": False,
+    "show_watermark": True,
+    "banner_position": 80,
+}
 
 pipeline_status = {
     "running": False, "step": "", "progress": 0,
@@ -90,45 +69,25 @@ def get_youtube():
     return build("youtube", "v3", credentials=get_credentials())
 
 # ── DRIVE HELPERS ────────────────────────────
-def get_folder_id(drive, folder_name):
-    res = drive.files().list(
-        q=f"name='{folder_name}' and mimeType='application/vnd.google-apps.folder' and trashed=false",
-        fields="files(id,name)"
-    ).execute()
+def get_folder_id(drive, folder_name, parent_id=None):
+    q = "name='" + folder_name + "' and mimeType='application/vnd.google-apps.folder' and trashed=false"
+    if parent_id:
+        q += " and '" + parent_id + "' in parents"
+    res = drive.files().list(q=q, fields="files(id,name)").execute()
     files = res.get("files", [])
     if not files:
-        # Create it at root level
+        # Create it
         meta = {"name": folder_name, "mimeType": "application/vnd.google-apps.folder"}
-        folder = drive.files().create(body=meta, fields="id").execute()
-        return folder["id"]
+        if parent_id:
+            meta["parents"] = [parent_id]
+        return drive.files().create(body=meta, fields="id").execute()["id"]
     return files[0]["id"]
 
-def get_or_create_subfolder(drive, name, parent_id):
-    """Get or create a subfolder inside a parent."""
-    q = "'" + parent_id + "' in parents and name='" + name + "' and mimeType='application/vnd.google-apps.folder' and trashed=false"
-    res = drive.files().list(q=q, fields="files(id,name)").execute()
-    if res.get("files"):
-        return res["files"][0]["id"]
-    meta = {"name": name, "mimeType": "application/vnd.google-apps.folder", "parents": [parent_id]}
-    return drive.files().create(body=meta, fields="id").execute()["id"]
-
 def list_channel_folders(drive):
-    """List subfolders inside raw_videos/ — each is a channel."""
-    root_id = get_folder_id(drive, ROOT_FOLDER)
-    q = "'" + root_id + "' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false and name != 'archive'"
+    root_id = get_folder_id(drive, DRIVE_FOLDER)
+    q = "'" + root_id + "' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false"
     res = drive.files().list(q=q, fields="files(id,name)").execute()
     return res.get("files", [])
-
-def delete_old_archive(drive, channel_folder_id, days=3):
-    """Delete archive files older than N days."""
-    from datetime import timedelta
-    archive_id = get_or_create_subfolder(drive, "archive", channel_folder_id)
-    cutoff = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
-    q = "'" + archive_id + "' in parents and trashed=false and createdTime < '" + cutoff + "'"
-    res = drive.files().list(q=q, fields="files(id,name)").execute()
-    for f in res.get("files", []):
-        drive.files().delete(fileId=f["id"]).execute()
-        print(f"Auto-deleted from archive: {f['name']}")
 
 def list_videos(drive, folder_id, processed_ids):
     res = drive.files().list(
@@ -147,15 +106,13 @@ def download_video(drive, file_id, dest_path):
             _, done = downloader.next_chunk()
 
 def move_to_archive(drive, file_id, parent_folder_id):
-    """Move file to archive/ inside the channel folder. Delete after 3 days."""
-    archive_id = get_or_create_subfolder(drive, "archive", parent_folder_id)
+    archive_id = get_folder_id(drive, "archive", parent_id=parent_folder_id)
     drive.files().update(
         fileId=file_id,
         addParents=archive_id,
         removeParents=parent_folder_id,
         fields="id,parents"
     ).execute()
-    print(f"Moved to archive")
 
 # ── CLAUDE VIDEO ANALYSIS ────────────────────
 def extract_frames(video_path, num_frames=3):
@@ -340,9 +297,7 @@ def generate_thumbnail(metadata, video_type, output_path):
 
 # ── VIDEO PROCESSING ─────────────────────────
 def process_video(input_path, output_path, metadata, video_type):
-    """Add overlays based on frontend toggle settings."""
-
-    # Read toggle settings from current_config
+    """Add overlays based on toggle settings."""
     show_banner    = current_config.get("show_banner", False)
     show_caption   = current_config.get("show_caption", False)
     show_watermark = current_config.get("show_watermark", True)
@@ -350,7 +305,7 @@ def process_video(input_path, output_path, metadata, video_type):
 
     def esc(s):
         s = str(s)[:55]
-        for ch in ["'", '"', "\\", ":", "[", "]", "{", "}", "%", "\n"]:
+        for ch in ["'", '"', ":", "[", "]", "{", "}", "%"]:
             s = s.replace(ch, " ")
         return s.strip()
 
@@ -455,7 +410,7 @@ def run_pipeline():
     global pipeline_status
     if pipeline_status["running"]:
         return
-    if not current_config.get("active") or not current_config.get("topic"):
+    if not current_config.get("active"):
         return
     
     pipeline_status["running"] = True
@@ -474,20 +429,18 @@ def run_pipeline():
         pipeline_status["step"] = "Connecting to Drive..."
         pipeline_status["progress"] = 10
         drive = get_drive()
-
-        # Use channel subfolder if specified, else auto-pick first available
+        
+        # Use channel subfolder if set, else auto-pick first channel
         channel_name = current_config.get("channel_folder", "")
         if not channel_name:
             folders = list_channel_folders(drive)
             if folders:
                 channel_name = folders[0]["name"]
                 current_config["channel_folder"] = channel_name
-                print(f"Auto-selected channel: {channel_name}")
-
+        
         if channel_name:
-            root_id = get_folder_id(drive, ROOT_FOLDER)
-            folder_id = get_or_create_subfolder(drive, channel_name, root_id)
-            delete_old_archive(drive, folder_id, days=3)
+            root_id = get_folder_id(drive, DRIVE_FOLDER)
+            folder_id = get_folder_id(drive, channel_name, parent_id=root_id)
         else:
             folder_id = get_folder_id(drive, DRIVE_FOLDER)
 
@@ -605,6 +558,8 @@ def pipeline_status_route():
 
 @app.route("/pipeline/run", methods=["POST"])
 def trigger_pipeline():
+    # Temporarily set active=True so pipeline runs
+    current_config["active"] = True
     threading.Thread(target=run_pipeline, daemon=True).start()
     return jsonify({"status": "started"})
 
