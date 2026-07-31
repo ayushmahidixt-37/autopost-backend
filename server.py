@@ -1,906 +1,413 @@
-from flask import Flask, request, jsonify, send_file
-import subprocess as sp
-sp.run(["apt-get", "update", "-qq"], capture_output=True)
-sp.run(["apt-get", "install", "-y", "-qq", "ffmpeg"], capture_output=True)
-
-from flask_cors import CORS
-import anthropic, os, json, threading, schedule, time, tempfile, base64
+import os
 from datetime import datetime
-from PIL import Image, ImageDraw, ImageFont
-from google.oauth2.credentials import Credentials
-from google.auth.transport.requests import Request
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
-import io
+from functools import wraps
+
+from flask import Flask, request, jsonify, g
+from flask_cors import CORS
+
+from db import get_anon_client, get_client_for_token
+import dpdp_templates as tmpl
 
 app = Flask(__name__)
 CORS(app)
 
-# ── SETUP ────────────────────────────────────
-ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-GOOGLE_TOKEN  = os.environ.get("GOOGLE_TOKEN", "")
-DRIVE_FOLDER  = os.environ.get("DRIVE_FOLDER", "raw_videos")
-YT_CHANNEL    = os.environ.get("YOUTUBE_CHANNEL", "@YourChannel")
-
-client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
-
-# ── MULTI-CHANNEL SUPPORT ──────────────────────
-# Add new channels by adding Railway variables:
-#   CHANNEL_2_NAME = MyNewChannel
-#   CHANNEL_2_TOKEN = {json token}
-# No code changes needed!
-
-def load_all_channels():
-    """Auto-discover all CHANNEL_N_NAME/TOKEN pairs from env vars."""
-    channels = {}
-    
-    # Always include the default channel
-    if GOOGLE_TOKEN and YT_CHANNEL:
-        name = YT_CHANNEL.replace("@","")
-        channels[name] = {
-            "name": name,
-            "token": GOOGLE_TOKEN,
-            "drive_folder": DRIVE_FOLDER,
-        }
-    
-    # Discover additional channels from env vars
-    i = 1
-    while True:
-        name = os.environ.get(f"CHANNEL_{i}_NAME", "")
-        token = os.environ.get(f"CHANNEL_{i}_TOKEN", "")
-        if not name or not token:
-            break
-        folder = os.environ.get(f"CHANNEL_{i}_DRIVE", name)
-        channels[name] = {
-            "name": name,
-            "token": token,
-            "drive_folder": folder,
-        }
-        i += 1
-    
-    return channels
-
-ALL_CHANNELS = load_all_channels()
-
-def get_channel_credentials(channel_name):
-    """Get Google credentials for a specific channel."""
-    ch = ALL_CHANNELS.get(channel_name)
-    if not ch:
-        # Fallback to default
-        token = GOOGLE_TOKEN
-    else:
-        token = ch["token"]
-    creds = Credentials.from_authorized_user_info(json.loads(token))
-    if creds.expired and creds.refresh_token:
-        creds.refresh(Request())
-    return creds
-
-def get_channel_drive(channel_name):
-    return build("drive", "v3", credentials=get_channel_credentials(channel_name))
-
-def get_channel_youtube(channel_name):
-    return build("youtube", "v3", credentials=get_channel_credentials(channel_name))
-
-current_config = {
-    "topic": "", "channel": "", "posts_per_day": 3,
-    "privacy": "private", "active": False,
-    "video_type": "shorts",
-    "caption": "", "hashtags": [],
-    "channel_folder": "",
-    "show_banner": False,
-    "show_caption": False,
-    "show_watermark": True,
-    "banner_position": 80,
+ESCALATION_STAGE_AFTER_SENT = {
+    # days elapsed since sent_at -> status to surface as "due"
+    3: "reminder_due",
+    7: "legal_notice_due",
+    14: "complaint_prep_due",
 }
 
-pipeline_status = {
-    "running": False, "step": "", "progress": 0,
-    "last_run": None, "last_error": None,
-    "videos_posted": 0
-}
 
-SYSTEM = """Tum AutoPost AI ho. Jab user topic de:
-1. Better version suggest karo
-2. 3 punchy captions do
-3. 8 hashtags do
-4. Video type poocho (Shorts ya Regular)
-5. Confirm maango
+# ── Auth ──────────────────────────────────────────────────────────────────
+def require_auth(fn):
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            return jsonify({"error": "Missing bearer token"}), 401
+        token = auth_header.removeprefix("Bearer ").strip()
 
-Confirm hone par SIRF yeh JSON do:
-```json
-{"confirmed":true,"topic":"...","caption":"...","hashtags":["t1","t2","t3","t4","t5","t6","t7","t8"],"posts_per_day":3,"video_type":"shorts"}
-```
-Chhote jawab. Hindi/English dono okay."""
-
-# ── GOOGLE AUTH ──────────────────────────────
-def get_credentials():
-    creds = Credentials.from_authorized_user_info(json.loads(GOOGLE_TOKEN))
-    if creds.expired and creds.refresh_token:
-        creds.refresh(Request())
-    return creds
-
-def get_drive():
-    return build("drive", "v3", credentials=get_credentials())
-
-def get_youtube():
-    return build("youtube", "v3", credentials=get_credentials())
-
-# ── DRIVE HELPERS ────────────────────────────
-def get_folder_id(drive, folder_name, parent_id=None):
-    q = "name='" + folder_name + "' and mimeType='application/vnd.google-apps.folder' and trashed=false"
-    if parent_id:
-        q += " and '" + parent_id + "' in parents"
-    res = drive.files().list(q=q, fields="files(id,name)").execute()
-    files = res.get("files", [])
-    if not files:
-        # Create it
-        meta = {"name": folder_name, "mimeType": "application/vnd.google-apps.folder"}
-        if parent_id:
-            meta["parents"] = [parent_id]
-        return drive.files().create(body=meta, fields="id").execute()["id"]
-    return files[0]["id"]
-
-def list_channel_folders(drive):
-    root_id = get_folder_id(drive, DRIVE_FOLDER)
-    q = "'" + root_id + "' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false"
-    res = drive.files().list(q=q, fields="files(id,name)").execute()
-    return res.get("files", [])
-
-def list_videos(drive, folder_id, processed_ids):
-    res = drive.files().list(
-        q=f"'{folder_id}' in parents and mimeType='video/mp4' and trashed=false",
-        fields="files(id,name,size)"
-    ).execute()
-    all_videos = res.get("files", [])
-    return [v for v in all_videos if v["id"] not in processed_ids]
-
-def download_video(drive, file_id, dest_path):
-    request = drive.files().get_media(fileId=file_id)
-    with open(dest_path, "wb") as f:
-        downloader = MediaIoBaseDownload(f, request, chunksize=10*1024*1024)
-        done = False
-        while not done:
-            _, done = downloader.next_chunk()
-
-def move_to_archive(drive, file_id, parent_folder_id):
-    archive_id = get_folder_id(drive, "archive", parent_id=parent_folder_id)
-    drive.files().update(
-        fileId=file_id,
-        addParents=archive_id,
-        removeParents=parent_folder_id,
-        fields="id,parents"
-    ).execute()
-
-# ── CLAUDE VIDEO ANALYSIS ────────────────────
-def extract_frames(video_path, num_frames=3):
-    """Extract multiple frames from video for Claude to analyze."""
-    frames = []
-    duration_result = sp.run([
-        "ffprobe", "-v", "error", "-show_entries", "format=duration",
-        "-of", "default=noprint_wrappers=1:nokey=1", video_path
-    ], capture_output=True, text=True)
-    
-    try:
-        duration = float(duration_result.stdout.strip())
-    except:
-        duration = 30.0
-    
-    for i in range(num_frames):
-        timestamp = duration * (i + 1) / (num_frames + 1)
-        frame_path = f"{video_path}_frame_{i}.jpg"
-        sp.run([
-            "ffmpeg", "-y", "-i", video_path,
-            "-ss", str(timestamp), "-frames:v", "1",
-            "-q:v", "2", frame_path
-        ], capture_output=True)
-        if os.path.exists(frame_path):
-            frames.append(frame_path)
-    return frames
-
-def analyze_video_with_claude(video_path, config):
-    """Claude analyzes video frames and generates content."""
-    video_type = config.get("video_type", "shorts")
-    topic = config.get("topic", "")
-    
-    # Extract frames
-    frame_paths = extract_frames(video_path, num_frames=3)
-    
-    content = []
-    
-    # Add frames for Claude to analyze
-    for fp in frame_paths:
-        if os.path.exists(fp):
-            with open(fp, "rb") as img:
-                img_b64 = base64.b64encode(img.read()).decode()
-            content.append({
-                "type": "image",
-                "source": {"type": "base64", "media_type": "image/jpeg", "data": img_b64}
-            })
-    
-    # Cleanup frame files
-    for fp in frame_paths:
-        if os.path.exists(fp):
-            os.remove(fp)
-    
-    if video_type == "shorts":
-        prompt = f"""Tum ek YouTube Shorts content expert ho.
-
-Channel topic: "{topic}"
-Channel: {YT_CHANNEL}
-Video type: SHORTS (max 20 seconds, vertical 9:16)
-Date: {datetime.now().strftime('%B %d, %Y')}
-
-In video frames ko analyze karo aur generate karo:
-
-1. HEADER TEXT: 3-5 words max, bold statement (video ke content se related)
-2. CAPTION: Max 8 words, curiosity-gap style, do NOT reveal outcome
-3. TITLE: Max 50 characters, punchy (SHORTS ke liye chhota title best hai)
-4. DESCRIPTION: 2-3 lines max, topic explain karo + call to action
-5. HASHTAGS: 8 hashtags - #Shorts zaroori include karo
-6. BANNER: "SHORTS • {datetime.now().strftime('%b %d').upper()}"
-7. THUMBNAIL_TEXT: 2-3 words jo thumbnail pe likhe jayein (bold, impactful)
-
-SIRF JSON respond karo:
-{{
-  "header": "...",
-  "caption": "...",
-  "yt_title": "...",
-  "yt_description": "...",
-  "hashtags": ["Shorts", "tag2", "tag3", "tag4", "tag5", "tag6", "tag7", "tag8"],
-  "banner_text": "...",
-  "thumbnail_text": "..."
-}}"""
-    else:
-        prompt = f"""Tum ek YouTube content expert ho.
-
-Channel topic: "{topic}"
-Channel: {YT_CHANNEL}
-Video type: REGULAR VIDEO (horizontal 16:9, variable length)
-Date: {datetime.now().strftime('%B %d, %Y')}
-
-In video frames ko analyze karo aur generate karo:
-
-1. TITLE: Max 70 characters, SEO-friendly, engaging
-2. DESCRIPTION: 5-7 lines - intro, key points, call to action, links placeholder
-3. CAPTION: 10-12 words, descriptive
-4. HASHTAGS: 10 relevant hashtags (no #Shorts)
-5. BANNER: Topic + date
-6. THUMBNAIL_TEXT: 3-4 words, high impact
-
-SIRF JSON respond karo:
-{{
-  "header": "...",
-  "caption": "...",
-  "yt_title": "...",
-  "yt_description": "...",
-  "hashtags": ["tag1", "tag2", "tag3", "tag4", "tag5", "tag6", "tag7", "tag8", "tag9", "tag10"],
-  "banner_text": "...",
-  "thumbnail_text": "..."
-}}"""
-    
-    content.append({"type": "text", "text": prompt})
-    
-    response = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=800,
-        messages=[{"role": "user", "content": content}]
-    )
-    
-    raw = response.content[0].text.strip()
-    raw = raw.replace("```json", "").replace("```", "").strip()
-    return json.loads(raw)
-
-# ── THUMBNAIL GENERATOR ──────────────────────
-def generate_thumbnail(metadata, video_type, output_path):
-    """Generate a thumbnail image using PIL."""
-    if video_type == "shorts":
-        W, H = 1080, 1920
-    else:
-        W, H = 1280, 720
-    
-    # Dark background
-    img = Image.new("RGB", (W, H), (12, 16, 28))
-    draw = ImageDraw.Draw(img)
-    
-    try:
-        font_big   = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 120 if video_type=="shorts" else 80)
-        font_med   = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 60 if video_type=="shorts" else 40)
-        font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 40 if video_type=="shorts" else 28)
-    except:
-        font_big = font_med = font_small = ImageFont.load_default()
-    
-    # Accent bar top
-    draw.rectangle([(0, 0), (W, 16)], fill=(0, 229, 204))
-    
-    # Thumbnail text (center)
-    thumb_text = metadata.get("thumbnail_text", metadata.get("header", "")).upper()
-    words = thumb_text.split()
-    lines, current = [], ""
-    for word in words:
-        test = (current + " " + word).strip()
-        bbox = draw.textbbox((0,0), test, font=font_big)
-        if bbox[2]-bbox[0] <= W-100:
-            current = test
-        else:
-            lines.append(current)
-            current = word
-    if current:
-        lines.append(current)
-    
-    line_h = font_big.size + 20
-    total_h = len(lines) * line_h
-    start_y = (H - total_h) // 2 - 50
-    
-    for i, line in enumerate(lines):
-        bbox = draw.textbbox((0,0), line, font=font_big)
-        tw = bbox[2]-bbox[0]
-        x = (W-tw)//2
-        y = start_y + i*line_h
-        # Shadow
-        draw.text((x+4, y+4), line, font=font_big, fill=(0,0,0))
-        draw.text((x, y), line, font=font_big, fill=(255,255,255))
-    
-    # Channel name bottom
-    ch = YT_CHANNEL
-    bbox = draw.textbbox((0,0), ch, font=font_small)
-    tw = bbox[2]-bbox[0]
-    draw.text(((W-tw)//2, H-100), ch, font=font_small, fill=(0,229,204))
-    
-    # Accent bar bottom
-    draw.rectangle([(0, H-16), (W, H)], fill=(0,229,204))
-    
-    img.save(output_path, quality=95)
-    return output_path
-
-# ── VIDEO PROCESSING ─────────────────────────
-def generate_subtitles(video_path, subtitle_path):
-    """
-    Use Whisper to transcribe speech and generate SRT subtitle file.
-    Returns True if subtitles were generated, False if no speech found.
-    """
-    try:
-        import whisper
-        model = whisper.load_model("tiny")  # tiny = fast, good enough for captions
-        result = model.transcribe(video_path, word_timestamps=False)
-        
-        segments = result.get("segments", [])
-        if not segments:
-            print("Whisper: No speech detected")
-            return False
-        
-        # Write SRT file
-        with open(subtitle_path, "w", encoding="utf-8") as f:
-            for i, seg in enumerate(segments, 1):
-                start = seg["start"]
-                end   = seg["end"]
-                text  = seg["text"].strip()
-                if not text:
-                    continue
-                # SRT format: HH:MM:SS,mmm
-                def fmt(t):
-                    h = int(t // 3600)
-                    m = int((t % 3600) // 60)
-                    s = int(t % 60)
-                    ms = int((t - int(t)) * 1000)
-                    return f"{h:02}:{m:02}:{s:02},{ms:03}"
-                f.write(f"{i}\n{fmt(start)} --> {fmt(end)}\n{text}\n\n")
-        
-        print(f"Subtitles generated: {len(segments)} segments")
-        return True
-    except ImportError:
-        print("Whisper not installed — installing...")
-        sp.run(["pip", "install", "openai-whisper", "-q"], capture_output=True)
-        return False
-    except Exception as e:
-        print(f"Subtitle generation error: {e}")
-        return False
-
-def process_video(input_path, output_path, metadata, video_type):
-    """Add overlays based on toggle settings."""
-    show_banner    = current_config.get("show_banner", False)
-    show_caption   = current_config.get("show_caption", False)
-    show_watermark = current_config.get("show_watermark", True)
-    banner_pos     = current_config.get("banner_position", 80)
-
-    def esc(s):
-        s = str(s)[:60]
-        for ch in ["'", '"', ":", "[", "]", "{", "}", "%", "\\"]:
-            s = s.replace(ch, " ")
-        return s.strip()
-
-    caption = esc(metadata.get("caption", "").upper())
-    banner  = esc(metadata.get("banner_text", "").upper())
-    channel = esc(YT_CHANNEL)
-    font    = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-
-    if video_type == "shorts":
-        scale_filter = "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920"
-        fs_cap = 42   # bigger caption
-        fs_ban = 30   # bigger banner
-        fs_cha = 28   # bigger watermark
-    else:
-        scale_filter = "scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080"
-        fs_cap = 52
-        fs_ban = 36
-        fs_cha = 34
-
-    filters = [scale_filter]
-
-    # BANNER — bold style with dark semi-transparent background
-    if show_banner and banner:
-        bpos = int(banner_pos)
-        # Dark bg behind banner text for readability
-        filters.append("drawbox=x=0:y=" + str(bpos) + ":w=iw:h=80:color=black@0.55:t=fill")
-        # Accent left bar
-        filters.append("drawbox=x=0:y=" + str(bpos) + ":w=8:h=80:color=#00E5CC@1:t=fill")
-        # Banner text — white, bold, left-aligned with padding
-        filters.append(
-            "drawtext=text='" + banner + "':fontfile=" + font +
-            ":fontsize=" + str(fs_ban) +
-            ":fontcolor=white:x=24:y=" + str(bpos + 22)
-        )
-
-    # SUBTITLES — Whisper AI generated, sync with speech
-    subtitle_path = input_path + ".srt"
-    subtitle_added = False
-    
-    if show_caption:
-        print("Generating subtitles with Whisper...")
-        has_subs = generate_subtitles(input_path, subtitle_path)
-        if has_subs and os.path.exists(subtitle_path):
-            subtitle_added = True
-            print("Subtitles will be burned in")
-        else:
-            print("No subtitles — no speech or generation failed")
-
-    # WATERMARK — bottom center, slightly below middle-bottom, bold & visible
-    if show_watermark and channel:
-        # Position: horizontally centered, at 80% of height (below center, above caption)
-        filters.append("drawbox=x=(w-text_w)/2-20:y=h*4/5-20:w=text_w+40:h=" + str(fs_cha+24) + ":color=black@0.45:t=fill")
-        filters.append(
-            "drawtext=text='" + channel + "':fontfile=" + font +
-            ":fontsize=" + str(fs_cha) +
-            ":fontcolor=white@0.90:borderw=2:bordercolor=black@0.7" +
-            ":x=(w-text_w)/2:y=h*4/5"
-        )
-
-    vf = ",".join(filters)
-    
-    # Build final FFmpeg command
-    # If subtitles exist, add subtitle filter
-    if subtitle_added:
-        # Escape subtitle path for FFmpeg
-        sub_path_esc = subtitle_path.replace("\\", "/").replace(":", "\\:")
-        subtitle_filter = "subtitles='" + sub_path_esc + "':force_style='FontName=DejaVu Sans Bold,FontSize=" + str(fs_cap) + ",PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=3,Shadow=1,Alignment=2,MarginV=60'"
-        vf = vf + "," + subtitle_filter
-
-    cmd = [
-        "ffmpeg", "-y", "-i", input_path,
-        "-vf", vf,
-        "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
-        "-c:a", "aac", "-b:a", "128k",
-    ]
-    
-    # For shorts: trim to 20 seconds max
-    if video_type == "shorts":
-        cmd += ["-t", "20"]
-    
-    cmd.append(output_path)
-    
-    result = sp.run(cmd, capture_output=True, text=True)
-    
-    # Cleanup subtitle file
-    if os.path.exists(subtitle_path):
-        os.remove(subtitle_path)
-    
-    if result.returncode != 0:
-        raise Exception(f"FFmpeg failed: {result.stderr[-300:]}")
-
-# ── YOUTUBE UPLOAD ───────────────────────────
-def upload_to_youtube(video_path, thumbnail_path, metadata, config):
-    youtube = get_youtube()
-    
-    hashtags = metadata.get("hashtags", [])
-    description = metadata["yt_description"] + "\n\n" + " ".join(f"#{t}" for t in hashtags)
-    
-    body = {
-        "snippet": {
-            "title":       metadata["yt_title"][:100],
-            "description": description,
-            "tags":        hashtags,
-            "categoryId":  "17"
-        },
-        "status": {
-            "privacyStatus":           config.get("privacy", "private"),
-            "selfDeclaredMadeForKids": False
-        }
-    }
-    
-    media   = MediaFileUpload(video_path, mimetype="video/mp4", resumable=True)
-    request = youtube.videos().insert(part="snippet,status", body=body, media_body=media)
-    response = None
-    while response is None:
-        _, response = request.next_chunk()
-    
-    video_id = response["id"]
-    
-    # Set custom thumbnail
-    if thumbnail_path and os.path.exists(thumbnail_path):
+        client = get_client_for_token(token)
         try:
-            youtube.thumbnails().set(
-                videoId=video_id,
-                media_body=MediaFileUpload(thumbnail_path, mimetype="image/jpeg")
-            ).execute()
-        except Exception as e:
-            print(f"Thumbnail set failed: {e}")
-    
-    return video_id
+            user = client.auth.get_user(token)
+        except Exception:
+            return jsonify({"error": "Invalid or expired token"}), 401
+        if not user or not user.user:
+            return jsonify({"error": "Invalid or expired token"}), 401
 
-# ── HISTORY ──────────────────────────────────
-HISTORY_FILE = "/app/history.json"
+        g.db = client
+        g.user_id = user.user.id
+        g.user_email = user.user.email
+        return fn(*args, **kwargs)
 
-def load_history():
-    if os.path.exists(HISTORY_FILE):
-        with open(HISTORY_FILE) as f:
-            return json.load(f)
-    return {"processed_ids": [], "posted": []}
+    return wrapper
 
-def save_history(h):
-    with open(HISTORY_FILE, "w") as f:
-        json.dump(h, f, indent=2)
 
-# ── MAIN PIPELINE ────────────────────────────
-def run_pipeline():
-    global pipeline_status
-    if pipeline_status["running"]:
-        return
-    if not current_config.get("active"):
-        return
-    
-    pipeline_status["running"] = True
-    pipeline_status["last_error"] = None
-    today   = datetime.now().date().isoformat()
-    history = load_history()
-    posted_today = [p for p in history["posted"] if p.get("date") == today]
-    max_per_day  = current_config.get("posts_per_day", 3)
-    video_type   = current_config.get("video_type", "shorts")
-    
+@app.route("/auth/signup", methods=["POST"])
+def signup():
+    data = request.get_json(force=True) or {}
+    email = data.get("email", "").strip()
+    password = data.get("password", "")
+    full_name = data.get("full_name", "").strip()
+    if not email or not password:
+        return jsonify({"error": "email and password are required"}), 400
+
+    client = get_anon_client()
     try:
-        if len(posted_today) >= max_per_day:
-            pipeline_status["step"] = f"Daily cap reached ({max_per_day}/day)"
-            return
-
-        pipeline_status["step"] = "Connecting to Drive..."
-        pipeline_status["progress"] = 10
-        drive = get_drive()
-        
-        # Use channel subfolder if set, else auto-pick first channel
-        channel_name = current_config.get("channel_folder", "")
-        if not channel_name:
-            folders = list_channel_folders(drive)
-            if folders:
-                channel_name = folders[0]["name"]
-                current_config["channel_folder"] = channel_name
-        
-        if channel_name:
-            root_id = get_folder_id(drive, DRIVE_FOLDER)
-            folder_id = get_folder_id(drive, channel_name, parent_id=root_id)
-        else:
-            folder_id = get_folder_id(drive, DRIVE_FOLDER)
-
-        pipeline_status["step"] = "Finding new videos..."
-        pipeline_status["progress"] = 20
-        videos = list_videos(drive, folder_id, history["processed_ids"])
-
-        if not videos:
-            pipeline_status["step"] = "No new videos in Drive folder"
-            return
-
-        video = videos[0]
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            raw_path       = os.path.join(tmpdir, "raw.mp4")
-            processed_path = os.path.join(tmpdir, "processed.mp4")
-            thumb_path     = os.path.join(tmpdir, "thumbnail.jpg")
-
-            pipeline_status["step"] = f"Downloading: {video['name']}"
-            pipeline_status["progress"] = 30
-            download_video(drive, video["id"], raw_path)
-
-            pipeline_status["step"] = "Claude is analyzing video..."
-            pipeline_status["progress"] = 45
-            metadata = analyze_video_with_claude(raw_path, current_config)
-            print(f"Analysis: {metadata.get('yt_title')}")
-
-            pipeline_status["step"] = "Generating thumbnail..."
-            pipeline_status["progress"] = 55
-            generate_thumbnail(metadata, video_type, thumb_path)
-
-            pipeline_status["step"] = "Adding captions, banner & watermark..."
-            pipeline_status["progress"] = 65
-            process_video(raw_path, processed_path, metadata, video_type)
-
-            pipeline_status["step"] = "Uploading to YouTube..."
-            pipeline_status["progress"] = 80
-            video_id = upload_to_youtube(processed_path, thumb_path, metadata, current_config)
-
-            pipeline_status["step"] = "Moving to archive..."
-            pipeline_status["progress"] = 90
-            move_to_archive(drive, video["id"], folder_id)
-
-            history["processed_ids"].append(video["id"])
-            history["posted"].append({
-                "file":          video["name"],
-                "video_id":      video_id,
-                "date":          today,
-                "posted_at":     datetime.now().strftime("%H:%M"),
-                "channel":       current_config.get("channel_folder", ""),
-                "topic":         current_config.get("topic", ""),
-                "type":          video_type,
-                "title":         metadata.get("yt_title", ""),
-                "caption":       metadata.get("caption", ""),
-                "caption_style": "curiosity-gap",
-                "hashtags":      metadata.get("hashtags", []),
-                "banner_on":     current_config.get("show_banner", False),
-                "caption_on":    current_config.get("show_caption", False),
-                # Analytics fields — filled later by analytics scheduler
-                "views_3d":      None,
-                "watch_pct":     None,
-                "likes":         None,
-                "subs_gained":   None,
-                "analytics_fetched": False,
-            })
-            save_history(history)
-
-            pipeline_status["videos_posted"] += 1
-            pipeline_status["step"]     = f"Done! https://youtube.com/watch?v={video_id}"
-            pipeline_status["progress"] = 100
-            pipeline_status["last_run"] = datetime.now().isoformat()
-
-    except Exception as e:
-        pipeline_status["last_error"] = str(e)
-        pipeline_status["step"] = f"Error: {str(e)[:100]}"
-    finally:
-        pipeline_status["running"] = False
-
-# ── SCHEDULER ────────────────────────────────
-def fetch_video_analytics(video_id, channel_name):
-    """Fetch YouTube Analytics for a video posted 3+ days ago."""
-    try:
-        creds = get_channel_credentials(channel_name)
-        yt_analytics = build("youtubeAnalytics", "v2", credentials=creds)
-        from datetime import timedelta
-        end_date = datetime.now().date().isoformat()
-        start_date = (datetime.now().date() - timedelta(days=30)).isoformat()
-        result = yt_analytics.reports().query(
-            ids="channel==MINE",
-            startDate=start_date,
-            endDate=end_date,
-            metrics="views,averageViewPercentage,likes,subscribersGained",
-            filters=f"video=={video_id}"
-        ).execute()
-        rows = result.get("rows", [])
-        if rows:
-            return {
-                "views_3d":    int(rows[0][0]),
-                "watch_pct":   round(rows[0][1], 1),
-                "likes":       int(rows[0][2]),
-                "subs_gained": int(rows[0][3]),
-            }
-    except Exception as e:
-        print(f"Analytics fetch error: {e}")
-    return None
-
-def run_analytics_update():
-    """Fetch analytics for videos posted 3+ days ago that haven't been fetched."""
-    from datetime import timedelta
-    history = load_history()
-    updated = False
-    cutoff = (datetime.now().date() - timedelta(days=3)).isoformat()
-    
-    for entry in history["posted"]:
-        if entry.get("analytics_fetched"):
-            continue
-        if entry.get("date", "9999") > cutoff:
-            continue  # Too recent
-        if not entry.get("video_id"):
-            continue
-        
-        channel = entry.get("channel", list(ALL_CHANNELS.keys())[0] if ALL_CHANNELS else "")
-        stats = fetch_video_analytics(entry["video_id"], channel)
-        if stats:
-            entry.update(stats)
-            entry["analytics_fetched"] = True
-            updated = True
-            print(f"Analytics updated: {entry['title']} — {stats['views_3d']} views")
-    
-    if updated:
-        save_history(history)
-
-def generate_growth_recommendations(channel_name):
-    """Claude analyzes performance data and gives recommendations."""
-    history = load_history()
-    channel_posts = [p for p in history["posted"] 
-                     if p.get("channel") == channel_name and p.get("analytics_fetched")]
-    
-    if len(channel_posts) < 2:
-        return "Abhi enough data nahi hai. 3+ videos post karo aur 3 din baad analytics aa jaayegi."
-    
-    # Build performance summary
-    summary = []
-    for p in channel_posts[-10:]:  # Last 10 videos
-        summary.append({
-            "title": p.get("title",""),
-            "type": p.get("type",""),
-            "caption": p.get("caption",""),
-            "hashtags": p.get("hashtags",[])[:3],
-            "posted_at": p.get("posted_at",""),
-            "views": p.get("views_3d", 0),
-            "watch_pct": p.get("watch_pct", 0),
-            "likes": p.get("likes", 0),
-            "subs": p.get("subs_gained", 0),
+        res = client.auth.sign_up({
+            "email": email,
+            "password": password,
+            "options": {"data": {"full_name": full_name}},
         })
-    
-    prompt = f"""YouTube channel analytics data for channel: {channel_name}
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
 
-Recent video performance:
-{json.dumps(summary, indent=2)}
+    return jsonify({
+        "user_id": res.user.id if res.user else None,
+        "session": _serialize_session(res.session),
+        "note": "Check your email to confirm your account if confirmation is required.",
+    }), 201
 
-Analyze this data and provide:
-1. Which video TYPE (Shorts/Regular) is performing better and why
-2. Which CAPTION STYLE is getting more views/watch time
-3. Which HASHTAGS are working best
-4. Best POSTING TIME based on data
-5. Top 3 specific actionable recommendations for next videos
-6. Suggested caption style and hashtags to use NEXT TIME
 
-Be specific. Use numbers from the data. Reply in Hindi/English mix.
-Format as JSON:
-{{
-  "best_type": "shorts/regular",
-  "best_caption_style": "...",
-  "best_hashtags": ["tag1","tag2","tag3"],
-  "best_time": "HH:MM",
-  "recommendations": ["rec1","rec2","rec3"],
-  "next_caption_hint": "...",
-  "summary": "2-3 line overall summary"
-}}"""
+@app.route("/auth/login", methods=["POST"])
+def login():
+    data = request.get_json(force=True) or {}
+    email = data.get("email", "").strip()
+    password = data.get("password", "")
+    if not email or not password:
+        return jsonify({"error": "email and password are required"}), 400
 
-    response = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=1000,
-        messages=[{"role": "user", "content": prompt}]
-    )
-    raw = response.content[0].text.strip().replace("```json","").replace("```","").strip()
+    client = get_anon_client()
     try:
-        return json.loads(raw)
-    except:
-        return {"summary": raw}
+        res = client.auth.sign_in_with_password({"email": email, "password": password})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 401
 
-def scheduler():
-    schedule.every().day.at("09:00").do(run_pipeline)
-    schedule.every().day.at("13:00").do(run_pipeline)
-    schedule.every().day.at("18:00").do(run_pipeline)
-    # Check analytics every day at 10am
-    schedule.every().day.at("10:00").do(run_analytics_update)
-    while True:
-        schedule.run_pending()
-        time.sleep(60)
+    return jsonify({
+        "user_id": res.user.id if res.user else None,
+        "session": _serialize_session(res.session),
+    })
 
-# ── API ROUTES ───────────────────────────────
-@app.route("/")
-def index():
-    return send_file("index.html")
 
-@app.route("/chat", methods=["POST"])
-def chat():
-    data     = request.json
-    msgs     = data.get("messages", [])
-    response = client.messages.create(
-        model="claude-sonnet-4-6", max_tokens=800,
-        system=SYSTEM, messages=msgs
+def _serialize_session(session):
+    if not session:
+        return None
+    return {
+        "access_token": session.access_token,
+        "refresh_token": session.refresh_token,
+        "expires_at": session.expires_at,
+    }
+
+
+# ── Companies (privacy-contact directory) ──────────────────────────────────
+@app.route("/companies", methods=["GET"])
+@require_auth
+def list_companies():
+    query = request.args.get("q", "").strip()
+    q = g.db.table("companies").select("*").order("name")
+    if query:
+        q = q.ilike("name", f"%{query}%")
+    res = q.limit(50).execute()
+    return jsonify({"companies": res.data})
+
+
+@app.route("/companies", methods=["POST"])
+@require_auth
+def add_company():
+    data = request.get_json(force=True) or {}
+    name = data.get("name", "").strip()
+    if not name:
+        return jsonify({"error": "name is required"}), 400
+
+    row = {
+        "name": name,
+        "category": data.get("category"),
+        "privacy_email": data.get("privacy_email"),
+        "grievance_email": data.get("grievance_email"),
+        "dpo_email": data.get("dpo_email"),
+        "website": data.get("website"),
+        "notes": data.get("notes"),
+        "source_url": data.get("source_url"),
+        "verified": False,  # crowd-sourced entries always start unverified
+        "created_by": g.user_id,
+    }
+    res = g.db.table("companies").insert(row).execute()
+    return jsonify({"company": res.data[0] if res.data else None}), 201
+
+
+# ── Erasure requests ─────────────────────────────────────────────────────
+@app.route("/requests", methods=["POST"])
+@require_auth
+def create_request():
+    data = request.get_json(force=True) or {}
+    company_id = data.get("company_id")
+    full_name = data.get("full_name", "").strip()
+    data_categories = data.get("data_categories", [])
+    reason = data.get("reason")
+    authorization_confirmed = bool(data.get("authorization_confirmed"))
+
+    if not company_id or not full_name:
+        return jsonify({"error": "company_id and full_name are required"}), 400
+    if not authorization_confirmed:
+        return jsonify({
+            "error": "authorization_confirmed must be true — you must confirm "
+                     "you are requesting erasure of your own personal data "
+                     "before a request can be created."
+        }), 400
+
+    company_res = g.db.table("companies").select("*").eq("id", company_id).execute()
+    if not company_res.data:
+        return jsonify({"error": "company not found"}), 404
+    company = company_res.data[0]
+
+    req_row = {
+        "user_id": g.user_id,
+        "company_id": company_id,
+        "data_categories": data_categories,
+        "reason": reason,
+        "authorization_confirmed": True,
+        "status": "draft",
+    }
+    req_res = g.db.table("erasure_requests").insert(req_row).execute()
+    req = req_res.data[0]
+
+    letter = tmpl.build_initial_request(
+        full_name=full_name,
+        email=g.user_email,
+        company_name=company["name"],
+        data_categories=data_categories,
+        reason=reason,
     )
-    return jsonify({"reply": response.content[0].text})
 
-@app.route("/config", methods=["GET"])
-def get_config():
-    return jsonify(current_config)
+    _log_event(req["id"], "created", "Request created.")
+    _log_event(req["id"], "letter_generated", "Initial erasure request letter generated.")
 
-@app.route("/config", methods=["POST"])
-def set_config():
-    global current_config
-    current_config.update(request.json)
-    if current_config.get("active"):
-        threading.Thread(target=run_pipeline, daemon=True).start()
+    return jsonify({"request": req, "letter": letter}), 201
+
+
+@app.route("/requests", methods=["GET"])
+@require_auth
+def list_requests():
+    res = (
+        g.db.table("erasure_requests")
+        .select("*, companies(name, category)")
+        .eq("user_id", g.user_id)
+        .order("created_at", desc=True)
+        .execute()
+    )
+    requests_out = [_with_due_stage(r) for r in res.data]
+    return jsonify({"requests": requests_out})
+
+
+@app.route("/requests/<request_id>", methods=["GET"])
+@require_auth
+def get_request(request_id):
+    req = _load_owned_request(request_id)
+    if not req:
+        return jsonify({"error": "not found"}), 404
+
+    events_res = (
+        g.db.table("request_events")
+        .select("*")
+        .eq("request_id", request_id)
+        .order("created_at")
+        .execute()
+    )
+    return jsonify({"request": _with_due_stage(req), "timeline": events_res.data})
+
+
+@app.route("/requests/<request_id>/mark-sent", methods=["POST"])
+@require_auth
+def mark_sent(request_id):
+    req = _load_owned_request(request_id)
+    if not req:
+        return jsonify({"error": "not found"}), 404
+
+    now = datetime.utcnow().isoformat()
+    g.db.table("erasure_requests").update({
+        "status": "sent", "sent_at": now, "last_stage_at": now,
+    }).eq("id", request_id).execute()
+    _log_event(request_id, "marked_sent", "User confirmed the letter was sent to the company.")
     return jsonify({"status": "ok"})
 
-@app.route("/pipeline/status", methods=["GET"])
-def pipeline_status_route():
-    history     = load_history()
-    today       = datetime.now().date().isoformat()
-    posted_today = len([p for p in history["posted"] if p.get("date") == today])
+
+@app.route("/requests/<request_id>/next-letter", methods=["GET"])
+@require_auth
+def next_letter(request_id):
+    """
+    Returns the letter text for whatever escalation stage is currently due.
+    Nothing is auto-sent — the user copies this and sends it themselves,
+    then calls the matching /advance endpoint to log it.
+    """
+    req = _load_owned_request(request_id)
+    if not req:
+        return jsonify({"error": "not found"}), 404
+    if not req.get("sent_at"):
+        return jsonify({"error": "the initial request has not been marked as sent yet"}), 400
+
+    company = g.db.table("companies").select("name").eq("id", req["company_id"]).execute().data[0]
+    events = (
+        g.db.table("request_events").select("*")
+        .eq("request_id", request_id).order("created_at").execute().data
+    )
+    full_name = request.args.get("full_name", "").strip()
+    if not full_name:
+        return jsonify({"error": "full_name query param is required"}), 400
+
+    stage = _current_due_stage(req)
+    sent_date = _fmt_date(req["sent_at"])
+
+    if stage == "reminder_due":
+        letter = tmpl.build_reminder(
+            full_name=full_name, email=g.user_email,
+            company_name=company["name"], original_sent_date=sent_date,
+        )
+    elif stage == "legal_notice_due":
+        reminder_date = _find_event_date(events, "reminder_marked_sent") or sent_date
+        letter = tmpl.build_legal_notice(
+            full_name=full_name, email=g.user_email, company_name=company["name"],
+            original_sent_date=sent_date, reminder_sent_date=reminder_date,
+        )
+    elif stage == "complaint_prep_due":
+        reminder_date = _find_event_date(events, "reminder_marked_sent") or sent_date
+        notice_date = _find_event_date(events, "legal_notice_marked_sent") or sent_date
+        letter = tmpl.build_complaint_prep_notes(
+            full_name=full_name, email=g.user_email, company_name=company["name"],
+            original_sent_date=sent_date, reminder_sent_date=reminder_date,
+            legal_notice_sent_date=notice_date,
+        )
+    else:
+        return jsonify({"status": stage, "letter": None,
+                         "note": "No escalation step is due yet."})
+
+    return jsonify({"status": stage, "letter": letter})
+
+
+@app.route("/requests/<request_id>/advance", methods=["POST"])
+@require_auth
+def advance_stage(request_id):
+    req = _load_owned_request(request_id)
+    if not req:
+        return jsonify({"error": "not found"}), 404
+
+    stage = _current_due_stage(req)
+    event_map = {
+        "reminder_due": ("reminder_marked_sent", "reminder_sent"),
+        "legal_notice_due": ("legal_notice_marked_sent", "legal_notice_sent"),
+        "complaint_prep_due": ("complaint_prep_generated", "complaint_prepared"),
+    }
+    if stage not in event_map:
+        return jsonify({"error": f"nothing due to advance (current stage: {stage})"}), 400
+
+    event_type, new_status = event_map[stage]
+    now = datetime.utcnow().isoformat()
+    g.db.table("erasure_requests").update({
+        "status": new_status, "last_stage_at": now,
+    }).eq("id", request_id).execute()
+    _log_event(request_id, event_type, f"Marked '{stage}' step complete.")
+    return jsonify({"status": new_status})
+
+
+@app.route("/requests/<request_id>/resolve", methods=["POST"])
+@require_auth
+def resolve_request(request_id):
+    req = _load_owned_request(request_id)
+    if not req:
+        return jsonify({"error": "not found"}), 404
+    data = request.get_json(silent=True) or {}
+    now = datetime.utcnow().isoformat()
+    g.db.table("erasure_requests").update({
+        "status": "resolved", "resolved_at": now,
+    }).eq("id", request_id).execute()
+    _log_event(request_id, "resolved", data.get("note", "Marked resolved by user."))
+    return jsonify({"status": "resolved"})
+
+
+@app.route("/requests/<request_id>/note", methods=["POST"])
+@require_auth
+def add_note(request_id):
+    req = _load_owned_request(request_id)
+    if not req:
+        return jsonify({"error": "not found"}), 404
+    data = request.get_json(force=True) or {}
+    note = data.get("note", "").strip()
+    if not note:
+        return jsonify({"error": "note is required"}), 400
+    _log_event(request_id, "note", note)
+    return jsonify({"status": "ok"})
+
+
+# ── Helpers ─────────────────────────────────────────────────────────────
+def _load_owned_request(request_id):
+    res = g.db.table("erasure_requests").select("*").eq("id", request_id).execute()
+    return res.data[0] if res.data else None
+
+
+def _log_event(request_id, event_type, detail):
+    g.db.table("request_events").insert({
+        "request_id": request_id, "event_type": event_type, "detail": detail,
+    }).execute()
+
+
+def _current_due_stage(req):
+    if not req.get("sent_at"):
+        return None
+    elapsed_days = (datetime.utcnow() - _parse_dt(req["sent_at"])).days
+    status = req["status"]
+
+    completed_order = ["sent", "reminder_sent", "legal_notice_sent", "complaint_prepared", "resolved"]
+    if status in ("resolved", "withdrawn"):
+        return None
+
+    due_stage = None
+    for threshold, stage in ESCALATION_STAGE_AFTER_SENT.items():
+        if elapsed_days >= threshold:
+            due_stage = stage
+    if not due_stage:
+        return None
+
+    stage_order = {"reminder_due": 1, "legal_notice_due": 2, "complaint_prep_due": 3}
+    status_progress = {
+        "sent": 0, "reminder_due": 0, "reminder_sent": 1,
+        "legal_notice_due": 1, "legal_notice_sent": 2,
+        "complaint_prep_due": 2, "complaint_prepared": 3,
+    }
+    if stage_order[due_stage] <= status_progress.get(status, 0):
+        return None
+    return due_stage
+
+
+def _with_due_stage(req):
+    req = dict(req)
+    req["due_stage"] = _current_due_stage(req)
+    return req
+
+
+def _parse_dt(value):
+    return datetime.fromisoformat(value.replace("Z", "+00:00")).replace(tzinfo=None)
+
+
+def _fmt_date(value):
+    return _parse_dt(value).strftime("%d %B %Y")
+
+
+def _find_event_date(events, event_type):
+    for e in events:
+        if e["event_type"] == event_type:
+            return _fmt_date(e["created_at"])
+    return None
+
+
+@app.route("/", methods=["GET"])
+def index():
     return jsonify({
-        **pipeline_status,
-        "posted_today": posted_today,
-        "max_per_day":  current_config.get("posts_per_day", 3),
-        "topic":        current_config.get("topic", ""),
-        "video_type":   current_config.get("video_type", "shorts"),
-        "active":       current_config.get("active", False)
+        "status": "running",
+        "service": "consent-manager-erasure-mvp",
+        "note": "See README.md for setup and known limitations.",
     })
 
-@app.route("/pipeline/run", methods=["POST"])
-def trigger_pipeline():
-    # Temporarily set active=True so pipeline runs
-    current_config["active"] = True
-    threading.Thread(target=run_pipeline, daemon=True).start()
-    return jsonify({"status": "started"})
-
-@app.route("/history", methods=["GET"])
-def get_history():
-    return jsonify(load_history())
-
-@app.route("/channels", methods=["GET"])
-def get_channels():
-    try:
-        drive = get_drive()
-        folders = list_channel_folders(drive)
-        return jsonify({"channels": [f["name"] for f in folders]})
-    except Exception as e:
-        return jsonify({"channels": [], "error": str(e)})
-
-@app.route("/analytics/<channel_name>", methods=["GET"])
-def get_analytics(channel_name):
-    """Return performance data + Claude recommendations for a channel."""
-    history = load_history()
-    posts = [p for p in history["posted"] if p.get("channel") == channel_name]
-    
-    # Summary stats
-    total_views = sum(p.get("views_3d", 0) or 0 for p in posts)
-    total_videos = len(posts)
-    shorts = [p for p in posts if p.get("type") == "shorts"]
-    regular = [p for p in posts if p.get("type") == "regular"]
-    
-    def avg_views(lst):
-        v = [p.get("views_3d", 0) or 0 for p in lst]
-        return round(sum(v)/len(v)) if v else 0
-    
-    best_video = max(posts, key=lambda p: p.get("views_3d", 0) or 0) if posts else None
-    
-    return jsonify({
-        "channel": channel_name,
-        "total_videos": total_videos,
-        "total_views": total_views,
-        "avg_views": round(total_views / total_videos) if total_videos else 0,
-        "shorts_avg": avg_views(shorts),
-        "regular_avg": avg_views(regular),
-        "best_video": best_video,
-        "recent": posts[-5:][::-1],
-        "all_videos": posts[::-1],
-    })
-
-@app.route("/analytics/<channel_name>/recommend", methods=["GET"])
-def get_recommendations(channel_name):
-    """Claude analyzes data and gives growth recommendations."""
-    recs = generate_growth_recommendations(channel_name)
-    return jsonify(recs)
-
-@app.route("/analytics/refresh", methods=["POST"])
-def refresh_analytics():
-    """Manually trigger analytics fetch."""
-    threading.Thread(target=run_analytics_update, daemon=True).start()
-    return jsonify({"status": "started"})
-
-@app.route("/channels/all", methods=["GET"])
-def get_all_channels():
-    """Return all configured channels."""
-    return jsonify({"channels": list(ALL_CHANNELS.keys())})
-
-@app.route("/status", methods=["GET"])
-def status():
-    return jsonify({"status": "running", "topic": current_config.get("topic")})
 
 if __name__ == "__main__":
-    threading.Thread(target=scheduler, daemon=True).start()
     port = int(os.environ.get("PORT", 8080))
-    print(f"Server running on port {port}")
     app.run(host="0.0.0.0", port=port)
