@@ -1,7 +1,8 @@
-# "Nobody Believes Gutli" — Show Bible v1
+# Funny Tales — Show Bible v1
 
-Channel: Kids comedy (Channel concept, dual-audience: kids + adults)
-Status: Draft for review — nothing built yet, this is the creative foundation the automation pipeline will be built against.
+Channel name: **Funny Tales**
+Show: "Nobody Believes Gutli" (Channel concept, dual-audience: kids + adults)
+Status: Names and format confirmed. Episode length confirmed at Shorts (~60–75s). Next: prove the format with full sample scripts (see `funny-tales-episode-scripts.md`), then move to voice/character production assets.
 
 ## Logline
 A 6-year-old and her sarcastic stuffed bear best friend — who only comes alive for her — cause daily chaos that the grown-ups never quite believe.
@@ -60,7 +61,10 @@ Gutli is fully alive and talks freely — but **only Baba can see/hear him anima
 - This is a **child-directed show** — plan for the "Made for Kids" classification regardless of adult viewership (see PROJECT_SUMMARY.md, compliance is content-based, not audience-based).
 - These rules should become literal checklist items for the automated Review/QA agent before anything publishes.
 
+## Confirmed
+- Channel name: **Funny Tales**
+- Episode length: Shorts, ~60–75s
+
 ## Open questions for next pass
-- Channel name (working title used "Nobody Believes Gutli" — confirm or workshop).
 - Voice choice for Gutli (TTS voice selection) and for narration/Baba's lines.
-- Confirm episode length target (Shorts ~60-75s vs. longer-form).
+- Full episode scripts — see `funny-tales-episode-scripts.md` for the first 3 drafted against this template.
