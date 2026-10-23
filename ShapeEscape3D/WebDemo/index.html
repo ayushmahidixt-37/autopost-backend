@@ -1,0 +1,928 @@
+<title>Shape Escape 3D</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@500;700;800&display=swap">
+<style>
+/* Layout: full-screen 3D stage with floating rounded HUD chips; one committed pastel "toy box" look (single theme). */
+:root {
+  --sky: #e8e1ff; --peach: #ffe5d9; --ink: #2b2d42; --ink-soft: #6c6f8a;
+  --card: rgba(255,255,255,.94); --coral: #ff6b6b; --teal: #4ecdc4; --violet: #7b61ff; --gold: #ffc23c;
+  --display: "Fredoka", "Nunito", system-ui, sans-serif; --body: "Nunito", system-ui, sans-serif;
+  color-scheme: light;
+}
+html, body { height: 100%; }
+body { margin: 0; overflow: hidden; background: linear-gradient(180deg, var(--sky), var(--peach)); color: var(--ink); font-family: var(--body); -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; }
+#app { position: relative; height: 100%; overflow: hidden; }
+#stage { position: absolute; inset: 0; touch-action: none; }
+#stage canvas { display: block; }
+.layer { position: absolute; inset: 0; pointer-events: none; display: flex; flex-direction: column; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 14px; }
+.layer > * { pointer-events: auto; }
+.row { display: flex; align-items: center; gap: 10px; }
+.spacer { flex: 1; pointer-events: none; }
+button { font: inherit; border: 0; cursor: pointer; color: inherit; }
+button:focus-visible { outline: 3px solid var(--violet); outline-offset: 3px; }
+.chip { background: var(--card); border-radius: 999px; padding: 10px 18px; font-weight: 800; box-shadow: 0 6px 18px rgba(80,50,130,.12); font-variant-numeric: tabular-nums; }
+.btn { border-radius: 26px; padding: 16px 26px; font-family: var(--display); font-weight: 600; font-size: 20px; box-shadow: 0 6px 0 rgba(0,0,0,.14), 0 10px 22px rgba(80,50,130,.16); transition: transform .08s; }
+.btn:active { transform: translateY(4px); box-shadow: 0 2px 0 rgba(0,0,0,.14); }
+.btn.primary { background: var(--coral); color: #fff; }
+.btn.soft { background: var(--card); color: var(--ink); }
+.btn.violet { background: var(--violet); color: #fff; }
+.icon-btn { width: 56px; height: 56px; border-radius: 20px; background: var(--card); display: grid; place-items: center; box-shadow: 0 5px 0 rgba(0,0,0,.1), 0 8px 18px rgba(80,50,130,.12); position: relative; }
+.icon-btn svg { width: 26px; height: 26px; }
+.icon-btn.gold { background: var(--gold); color: #fff; width: 66px; height: 66px; }
+.badge { position: absolute; top: -6px; right: -6px; background: var(--coral); color: #fff; border-radius: 999px; min-width: 24px; height: 24px; font-size: 13px; font-weight: 800; display: grid; place-items: center; padding: 0 6px; }
+
+/* Home */
+#home .logo { text-align: center; margin-top: 26px; }
+#home h1 { font-family: var(--display); font-weight: 700; font-size: clamp(40px, 11vw, 64px); line-height: .95; margin: 0; color: #fff; letter-spacing: .5px; text-shadow: 3px 3px 0 var(--violet), 0 10px 18px rgba(70,40,140,.3); text-wrap: balance; }
+#home .badge3d { display: inline-block; background: var(--coral); color: #fff; font-family: var(--display); font-weight: 700; font-size: 26px; padding: 2px 14px; border-radius: 14px; transform: rotate(5deg); margin-top: 8px; }
+#home .sub { font-weight: 800; color: var(--ink-soft); margin-top: 8px; letter-spacing: .08em; text-transform: uppercase; font-size: 13px; }
+#home .bottom { display: flex; flex-direction: column; align-items: center; gap: 14px; padding-bottom: 8px; }
+#home .play { font-size: 30px; padding: 18px 64px; }
+#home .cards { display: flex; gap: 12px; width: min(460px, 100%); }
+#home .cards button { flex: 1; min-width: 0; background: var(--card); border-radius: 24px; padding: 14px 10px; box-shadow: 0 6px 18px rgba(80,50,130,.12); display: flex; flex-direction: column; align-items: center; gap: 4px; }
+#home .cards strong { font-family: var(--display); font-size: 18px; }
+#home .cards span { font-size: 13px; color: var(--ink-soft); font-weight: 700; }
+
+/* HUD */
+#hud .title { text-align: center; flex: 1; min-width: 0; }
+#hud .title b { display: block; font-family: var(--display); font-size: 22px; }
+#hud .title small { color: var(--ink-soft); font-weight: 800; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+.bar { height: 12px; background: rgba(255,255,255,.6); border-radius: 99px; overflow: hidden; width: min(420px, 80%); margin: 10px auto 0; }
+.bar i { display: block; height: 100%; width: 0; background: var(--teal); border-radius: 99px; transition: width .35s ease; }
+#hud .bottomrow { display: flex; align-items: flex-end; justify-content: space-between; }
+.legend { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; font-size: 12px; font-weight: 800; color: var(--ink-soft); }
+.legend span { background: var(--card); border-radius: 99px; padding: 5px 10px; display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+#tip { position: absolute; left: 50%; bottom: 110px; transform: translateX(-50%); background: rgba(43,45,66,.88); color: #fff; padding: 12px 18px; border-radius: 18px; font-weight: 700; text-align: center; width: max-content; max-width: min(92vw, 440px); transition: opacity .3s; pointer-events: none; }
+
+/* Panels */
+.sheet { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); width: min(440px, calc(100% - 32px)); background: var(--card); border-radius: 30px; padding: 22px; box-shadow: 0 20px 50px rgba(70,40,140,.25); display: flex; flex-direction: column; gap: 12px; align-items: center; text-align: center; }
+#complete .head { position: absolute; top: 22px; left: 0; right: 0; text-align: center; pointer-events: none; }
+#complete h2 { font-family: var(--display); font-size: clamp(38px, 10vw, 56px); margin: 0; color: #fff; text-shadow: 3px 3px 0 var(--violet), 0 10px 18px rgba(70,40,140,.3); }
+#complete .objname { font-family: var(--display); font-size: 30px; font-weight: 600; margin-top: 4px; }
+#complete .newchip { display: inline-block; margin-top: 8px; background: var(--violet); color: #fff; border-radius: 99px; padding: 6px 14px; font-weight: 800; font-size: 14px; }
+.stars { font-size: 40px; letter-spacing: 6px; }
+.stars .on { color: var(--gold); } .stars .off { color: #d9d6e6; }
+.coins { font-family: var(--display); font-size: 28px; font-weight: 600; }
+.overlay { position: absolute; inset: 0; background: rgba(43,36,70,.35); display: grid; place-items: center; padding: 16px; pointer-events: auto; }
+.panel { background: var(--card); border-radius: 30px; width: min(520px, 100%); max-height: 86%; display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(70,40,140,.25); overflow: hidden; }
+.panel header { display: flex; align-items: center; justify-content: space-between; padding: 18px 20px 8px; }
+.panel header h3 { font-family: var(--display); font-size: 26px; margin: 0; }
+.panel .body { overflow: auto; padding: 8px 20px 20px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 10px; }
+.lvl { aspect-ratio: 1; border-radius: 20px; background: #f1eff7; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: var(--display); font-size: 22px; font-weight: 600; gap: 2px; max-width: 100%; }
+.lvl small { font-family: var(--body); font-size: 10px; font-weight: 800; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .05em; }
+.lvl.done { background: #d9f7ef; } .lvl.next { background: var(--gold); color: #fff; } .lvl.next small { color: #fff; }
+.lvl:disabled { opacity: .45; cursor: default; }
+.coll { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 12px; }
+.obj { border-radius: 22px; background: #f6f4fb; padding: 14px 10px; display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
+.obj .sw { width: 54px; height: 54px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 800; }
+.obj b { font-family: var(--display); font-size: 16px; font-weight: 600; }
+.obj span { font-size: 12px; color: var(--ink-soft); font-weight: 700; }
+.obj:disabled { cursor: default; }
+.hint-txt { color: var(--ink-soft); font-weight: 700; font-size: 14px; }
+#viewer .top { text-align: center; }
+#viewer h3 { font-family: var(--display); font-size: 32px; margin: 4px 0 0; }
+#toast { position: absolute; left: 50%; top: 90px; transform: translateX(-50%); background: rgba(43,45,66,.9); color: #fff; padding: 10px 16px; border-radius: 16px; font-weight: 700; opacity: 0; transition: opacity .25s; pointer-events: none; max-width: 90vw; text-align: center; }
+#loading { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--display); font-size: 22px; color: var(--ink-soft); pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .btn, .bar i { transition: none; } }
+</style>
+
+<div id="app">
+  <div id="stage"></div>
+  <div id="loading">Building puzzle…</div>
+
+  <section id="home" class="layer" hidden>
+    <div class="row"><div class="spacer"></div><div class="chip" id="coinsHome">🪙 0</div></div>
+    <div class="logo">
+      <h1>SHAPE ESCAPE</h1>
+      <div class="badge3d">3D</div>
+      <div class="sub">Everyday Objects</div>
+    </div>
+    <div class="spacer"></div>
+    <div class="bottom">
+      <div class="chip" id="homeLevel">Level 1 · Beginner</div>
+      <button class="btn primary play" id="playBtn">PLAY</button>
+      <div class="cards">
+        <button id="levelsBtn"><strong>Levels</strong><span id="levelsStat">0 / 30 solved</span></button>
+        <button id="collBtn"><strong>Collection</strong><span id="collStat">0 / 10 objects</span></button>
+      </div>
+    </div>
+  </section>
+
+  <section id="hud" class="layer" hidden>
+    <div class="row">
+      <button class="icon-btn" id="homeBtn" aria-label="Back to home"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 11 12 3l9 8v10h-6v-6H9v6H3z"/></svg></button>
+      <div class="title"><b id="hudLevel">Level 1</b><small id="hudTier">??? · Beginner</small></div>
+      <div class="chip" id="hudLeft">12 left</div>
+    </div>
+    <div class="bar"><i id="hudBar"></i></div>
+    <div class="spacer"></div>
+    <div class="legend" id="legend"></div>
+    <div class="bottomrow" style="margin-top:10px">
+      <button class="icon-btn" id="resetBtn" aria-label="Reset view"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3"/></svg></button>
+      <button class="icon-btn" id="restartBtn" aria-label="Restart level"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 3v5h-5"/></svg></button>
+      <div class="spacer"></div>
+      <button class="icon-btn gold" id="hintBtn" aria-label="Hint"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2zM9 19h6v1.5a1.5 1.5 0 0 1-1.5 1.5h-3A1.5 1.5 0 0 1 9 20.5z"/></svg><span class="badge" id="hintCount">3</span></button>
+    </div>
+    <div id="tip" style="opacity:0"></div>
+  </section>
+
+  <section id="complete" class="layer" hidden>
+    <div class="head">
+      <h2 id="cHead">Brilliant!</h2>
+      <div class="objname" id="cName">Coffee Mug</div>
+      <div class="newchip" id="cNew">New in Kitchen!</div>
+    </div>
+    <div class="sheet">
+      <div class="stars" id="cStars"></div>
+      <div class="coins" id="cCoins">🪙 +10</div>
+      <div class="hint-txt" id="cExtra"></div>
+      <button class="btn primary" id="nextBtn" style="width:100%">Continue</button>
+      <button class="btn soft" id="cHomeBtn" style="width:100%">Home</button>
+    </div>
+  </section>
+
+  <section id="viewer" class="layer" hidden>
+    <div class="row"><button class="icon-btn" id="viewerBack" aria-label="Back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></svg></button></div>
+    <div class="top"><h3 id="vName">Coffee Mug</h3><div class="hint-txt" id="vInfo">Kitchen</div></div>
+    <div class="spacer"></div>
+    <div class="hint-txt" style="text-align:center">Drag to rotate · Pinch or scroll to zoom</div>
+  </section>
+
+  <div id="levelsPanel" class="overlay" hidden>
+    <div class="panel"><header><h3>Levels</h3><button class="icon-btn" data-close aria-label="Close">✕</button></header><div class="body"><div class="grid" id="levelGrid"></div></div></div>
+  </div>
+  <div id="collPanel" class="overlay" hidden>
+    <div class="panel"><header><h3>Collection</h3><button class="icon-btn" data-close aria-label="Close">✕</button></header><div class="body"><p class="hint-txt" style="margin-top:0">Solve an object once to add it here. Tap a collected object to inspect it in 3D.</p><div class="coll" id="collGrid"></div></div></div>
+  </div>
+  <div id="toast"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+"use strict";
+/* =====================================================================
+   PUZZLE CORE — JavaScript port of ShapeEscape.Core (Unity project).
+   Same object templates, voxelizer, peel generator, hardening pass,
+   special arrows and solvability validator.
+   ===================================================================== */
+const DIRS = [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
+const axisOf = d => d >> 1;
+const CYCLES = [[2,4,3,5],[0,4,1,5],[0,2,1,3]]; // rotation cycles around X, Y, Z
+
+function mulberry(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+const rint = (r, n) => Math.floor(r() * n);
+function shuffle(arr, r) { for (let i = arr.length - 1; i > 0; i--) { const j = rint(r, i + 1); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; }
+
+function basis(ax) {
+  if (ax === 0) return [[0,1,0],[1,0,0],[0,0,1]];
+  if (ax === 2) return [[1,0,0],[0,0,1],[0,1,0]];
+  return [[1,0,0],[0,1,0],[0,0,1]];
+}
+const dot = (a, b) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+
+// Primitive factories (template space, ~2 units tall, Y up, +Z faces the viewer)
+const Bx = (c, h, pal) => ({ s: "box", c, h, pal, role: "solid" });
+const El = (c, h, pal) => ({ s: "ell", c, h, pal, role: "solid" });
+const Sp = (c, r, pal) => El(c, [r, r, r], pal);
+const Fr = (c, ax, rn, rp, hh, pal) => ({ s: "fru", c, ax, rn, rp, hh, pal, role: "solid" });
+const Cy = (c, ax, r, hh, pal) => Fr(c, ax, r, r, hh, pal);
+const To = (c, ax, R, r, pal, a0 = 0, a1 = 360) => ({ s: "tor", c, ax, R, r, pal, a0, a1, role: "solid" });
+const Ca = (a, b, r, pal) => ({ s: "cap", c: a, p: b, r, pal, role: "solid" });
+const carve = p => (p.role = "carve", p);
+const rev = p => (p.role = "reveal", p);
+const hol = (p, inner, depth = 1) => (p.hollow = inner, p.hdepth = depth, p);
+const X = 0, Y = 1, Z = 2;
+
+function contains(p, x, y, z) {
+  const dx = x - p.c[0], dy = y - p.c[1], dz = z - p.c[2];
+  switch (p.s) {
+    case "box": return Math.abs(dx) <= p.h[0] && Math.abs(dy) <= p.h[1] && Math.abs(dz) <= p.h[2];
+    case "ell": { const a = dx / p.h[0], b = dy / p.h[1], c = dz / p.h[2]; return a*a + b*b + c*c <= 1; }
+    case "fru": {
+      const [A, N, B] = basis(p.ax), d = [dx, dy, dz], h = dot(d, N);
+      if (h < -p.hh || h > p.hh) return false;
+      const r = p.rn + (p.rp - p.rn) * (h + p.hh) / (2 * p.hh), a = dot(d, A), b = dot(d, B);
+      return a*a + b*b <= r*r;
+    }
+    case "tor": {
+      const [A, N, B] = basis(p.ax), d = [dx, dy, dz];
+      const a = dot(d, A), b = dot(d, B), h = dot(d, N), q = Math.hypot(a, b) - p.R;
+      if (q*q + h*h > p.r*p.r) return false;
+      if (p.a1 - p.a0 >= 360) return true;
+      let ang = Math.atan2(b, a) * 180 / Math.PI; if (ang < 0) ang += 360;
+      let s = p.a0 % 360; if (s < 0) s += 360; const e = s + (p.a1 - p.a0);
+      return (ang >= s && ang <= e) || (ang + 360 >= s && ang + 360 <= e);
+    }
+    case "cap": {
+      const ab = [p.p[0]-p.c[0], p.p[1]-p.c[1], p.p[2]-p.c[2]], l2 = dot(ab, ab);
+      let t = l2 > 0 ? dot([dx, dy, dz], ab) / l2 : 0; t = Math.max(0, Math.min(1, t));
+      const ex = dx - ab[0]*t, ey = dy - ab[1]*t, ez = dz - ab[2]*t;
+      return ex*ex + ey*ey + ez*ez <= p.r*p.r;
+    }
+  }
+  return false;
+}
+
+function primBounds(p) {
+  if (p._b) return p._b;
+  let ext;
+  if (p.s === "box" || p.s === "ell") ext = p.h;
+  else if (p.s === "fru" || p.s === "tor") {
+    const [A, N, B] = basis(p.ax), r = p.s === "fru" ? Math.max(p.rn, p.rp) : p.R + p.r, hh = p.s === "fru" ? p.hh : p.r;
+    ext = [0,1,2].map(i => Math.abs(A[i])*r + Math.abs(N[i])*hh + Math.abs(B[i])*r);
+  } else {
+    const mn = [0,1,2].map(i => Math.min(p.c[i], p.p[i]) - p.r), mx = [0,1,2].map(i => Math.max(p.c[i], p.p[i]) + p.r);
+    return (p._b = { mn, mx });
+  }
+  return (p._b = { mn: p.c.map((v, i) => v - ext[i]), mx: p.c.map((v, i) => v + ext[i]) });
+}
+
+function sample(t, x, y, z) {
+  let pal = -1;
+  for (const p of t.prims) {
+    if (p.role === "reveal") continue;
+    const b = primBounds(p);
+    if (x < b.mn[0] || y < b.mn[1] || z < b.mn[2] || x > b.mx[0] || y > b.mx[1] || z > b.mx[2]) continue;
+    if (!contains(p, x, y, z)) continue;
+    if (p.role === "carve") return -1;
+    if (pal < 0) pal = p.pal;
+  }
+  return pal;
+}
+
+function solidBounds(t) {
+  const mn = [1e9,1e9,1e9], mx = [-1e9,-1e9,-1e9];
+  for (const p of t.prims) { if (p.role !== "solid") continue; const b = primBounds(p); for (let i = 0; i < 3; i++) { mn[i] = Math.min(mn[i], b.mn[i]); mx[i] = Math.max(mx[i], b.mx[i]); } }
+  return { mn, mx };
+}
+
+/* ---------- Everyday object templates (identical to ObjectCatalog.cs) ---------- */
+const OBJECTS = [
+  { id: "coffee_mug", name: "Coffee Mug", room: "Kitchen", palette: ["#FF7A6B","#FFB4A2","#6B4226","#FFF1E6"], prims: [
+    To([0.8,0.05,0], Z, 0.42, 0.15, 1, -95, 95), hol(Cy([0,0.74,0], Y, 0.78, 0.06, 3), 0.64),
+    hol(Cy([0,0,0], Y, 0.75, 0.8, 0), 0.667, 0.875), carve(Cy([0,0.2,0], Y, 0.5, 0.8, 0)), rev(Cy([0,0.5,0], Y, 0.56, 0.03, 2)) ] },
+  { id: "water_bottle", name: "Water Bottle", room: "Kitchen", palette: ["#6EC6FF","#3A5BA0","#FFFFFF"], prims: [
+    Cy([0,1.27,0], Y, 0.27, 0.14, 1), Cy([0,-0.2,0], Y, 0.52, 0.28, 2), Cy([0,-0.2,0], Y, 0.5, 0.85, 0),
+    Fr([0,0.8,0], Y, 0.5, 0.24, 0.16, 0), Cy([0,1.05,0], Y, 0.22, 0.1, 0) ] },
+  { id: "table_lamp", name: "Table Lamp", room: "Living Room", palette: ["#A1887F","#E0E0E0","#FFD166","#FFF3B0"], prims: [
+    hol(Fr([0,0.6,0], Y, 0.82, 0.45, 0.42, 2), 0.8), carve(Fr([0,0.52,0], Y, 0.66, 0.33, 0.42, 2)),
+    Cy([0,-1.0,0], Y, 0.58, 0.1, 0), Cy([0,-0.35,0], Y, 0.13, 0.6, 1), rev(Sp([0,0.32,0], 0.2, 3)) ] },
+  { id: "chair", name: "Chair", room: "Living Room", palette: ["#4ECDC4","#2B7A78","#C7F9F1"], prims: [
+    Bx([0,-0.1,0],[0.75,0.11,0.72],0), Bx([0,0.75,-0.62],[0.75,0.75,0.11],0),
+    Bx([0.6,-0.72,0.57],[0.11,0.52,0.11],1), Bx([-0.6,-0.72,0.57],[0.11,0.52,0.11],1),
+    Bx([0.6,-0.72,-0.57],[0.11,0.52,0.11],1), Bx([-0.6,-0.72,-0.57],[0.11,0.52,0.11],1),
+    rev(Bx([0,0.02,0.05],[0.68,0.04,0.62],2)) ] },
+  { id: "alarm_clock", name: "Alarm Clock", room: "Bedroom", palette: ["#FF8FAB","#FFFFFF","#FFD166","#8D99AE","#2B2D42"], prims: [
+    Sp([0.52,0.82,0],0.3,2), Sp([-0.52,0.82,0],0.3,2), Bx([0,1.0,0],[0.08,0.14,0.08],3), Cy([0,0,0], Z, 0.82, 0.36, 0),
+    Bx([0.45,-0.88,0],[0.12,0.14,0.14],3), Bx([-0.45,-0.88,0],[0.12,0.14,0.14],3),
+    rev(Cy([0,0,0.37], Z, 0.68, 0.02, 1)), rev(Bx([0,0.2,0.4],[0.035,0.26,0.02],4)), rev(Bx([0.15,0,0.41],[0.18,0.03,0.02],4)) ] },
+  { id: "headphones", name: "Headphones", room: "Electronics", palette: ["#7B61FF","#3D3B8E","#C9C3FF"], prims: [
+    Cy([0.74,-0.35,0], X, 0.32, 0.09, 2), Cy([-0.74,-0.35,0], X, 0.32, 0.09, 2),
+    Cy([0.95,-0.35,0], X, 0.4, 0.17, 1), Cy([-0.95,-0.35,0], X, 0.4, 0.17, 1),
+    To([0,0.2,0], Z, 0.92, 0.14, 0, 12, 168), Bx([0.92,0.18,0],[0.08,0.22,0.09],0), Bx([-0.92,0.18,0],[0.08,0.22,0.09],0) ] },
+  { id: "backpack", name: "Backpack", room: "Outdoor", palette: ["#FF9F1C","#FFBF69","#8C4A00"], prims: [
+    Bx([0,-0.35,0.5],[0.5,0.38,0.14],1), Bx([0.38,-0.05,-0.5],[0.1,0.8,0.09],2), Bx([-0.38,-0.05,-0.5],[0.1,0.8,0.09],2),
+    To([0,1.12,0], Z, 0.22, 0.08, 2, 0, 180), Bx([0,-0.1,0],[0.7,0.85,0.42],0), El([0,0.72,0],[0.7,0.42,0.42],0) ] },
+  { id: "camera", name: "Camera", room: "Electronics", palette: ["#4A4E69","#22223B","#9AD1D4","#F25F5C","#C9ADA7"], prims: [
+    Cy([0.65,0.68,0], Y, 0.13, 0.08, 3), Cy([0.1,-0.02,0.62], Z, 0.44, 0.3, 1), Bx([-0.45,0.7,0],[0.32,0.16,0.3],0),
+    Bx([0,0,0],[1.0,0.6,0.4],0), Bx([-0.82,0,0.42],[0.16,0.5,0.06],4),
+    rev(Cy([0.1,-0.02,0.93], Z, 0.3, 0.02, 2)), rev(Bx([0.65,0.42,0.41],[0.14,0.08,0.02],2)) ] },
+  (() => { const rear = [-1.1,-0.4,0], front = [1.1,-0.4,0], br = [-0.15,-0.4,0], seat = [-0.4,0.48,0], head = [0.72,0.5,0];
+    return { id: "bicycle", name: "Bicycle", room: "Outdoor", palette: ["#2D3142","#EF476F","#FFD166","#BFC0C0"], prims: [
+      To(rear, Z, 0.62, 0.13, 0), To(front, Z, 0.62, 0.13, 0), Bx([-0.42,0.66,0],[0.22,0.07,0.12],2),
+      Ca([0.62,0.78,-0.32],[0.62,0.78,0.32],0.09,0), Ca(rear, br, 0.12, 1), Ca(rear, seat, 0.12, 1), Ca(seat, br, 0.12, 1),
+      Ca(seat, head, 0.12, 1), Ca(head, br, 0.12, 1), Ca(head, front, 0.12, 1), Ca(head, [0.62,0.78,0], 0.1, 1),
+      rev(Cy(rear, Z, 0.1, 0.08, 3)), rev(Cy(front, Z, 0.1, 0.08, 3)), rev(Cy(br, Z, 0.16, 0.1, 3)) ] }; })(),
+  { id: "washing_machine", name: "Washing Machine", room: "Garage", palette: ["#E9F1F7","#A8DADC","#457B9D","#BDE0FE","#E63946"], prims: [
+    To([0,-0.15,0.72], Z, 0.5, 0.18, 2), Bx([0,0.82,0.74],[0.85,0.16,0.08],1), Bx([0,0,0],[0.85,1.0,0.75],0),
+    rev(Cy([0,-0.15,0.78], Z, 0.42, 0.03, 3)), rev(Cy([0.55,0.82,0.83], Z, 0.1, 0.04, 4)), rev(Bx([-0.35,0.82,0.83],[0.3,0.07,0.02],2)) ] },
+];
+
+/* ---------- Voxelizer ---------- */
+function voxelize(t, s) {
+  const { mn, mx } = solidBounds(t), c = [0,1,2].map(i => (mn[i] + mx[i]) / 2);
+  const lo = [0,1,2].map(i => Math.floor((mn[i] - c[i]) / s) - 1), hi = [0,1,2].map(i => Math.ceil((mx[i] - c[i]) / s) + 1);
+  const k = 3, offs = [-1/3, 0, 1/3].map(v => v * s), cells = [];
+  for (let ix = lo[0]; ix <= hi[0]; ix++) for (let iy = lo[1]; iy <= hi[1]; iy++) for (let iz = lo[2]; iz <= hi[2]; iz++) {
+    const x = c[0] + ix*s, y = c[1] + iy*s, z = c[2] + iz*s, votes = {}; let inside = 0;
+    for (const a of offs) for (const b of offs) for (const d of offs) { const p = sample(t, x+a, y+b, z+d); if (p >= 0) { inside++; votes[p] = (votes[p] || 0) + 1; } }
+    if (inside < 9) continue; // >= 30% of 27 sub-samples
+    let best = 0, bv = -1; for (const kk in votes) if (votes[kk] > bv) { bv = votes[kk]; best = +kk; }
+    cells.push({ x: ix, y: iy, z: iz, pal: best });
+  }
+  const m = [0,1,2].map(i => Math.min(...cells.map(q => [q.x,q.y,q.z][i])));
+  cells.forEach(q => { q.x -= m[0]; q.y -= m[1]; q.z -= m[2]; });
+  return { cells, s, origin: [c[0] + m[0]*s, c[1] + m[1]*s, c[2] + m[2]*s] };
+}
+const voxCache = {};
+function fitToCount(t, min, max, target) {
+  const key = t.id + min + "_" + max + "_" + target; if (voxCache[key]) return voxCache[key];
+  const { mn, mx } = solidBounds(t), ext = Math.max(...[0,1,2].map(i => mx[i] - mn[i]));
+  let lo = ext / 40, hi = ext / 1.2, best = null, bestScore = 1e9;
+  const consider = m => { const n = m.cells.length, out = n < min ? (min - n) * 1000 : n > max ? (n - max) * 1000 : 0, sc = out + Math.abs(n - target); if (sc < bestScore) { bestScore = sc; best = m; } };
+  for (let i = 0; i < 14; i++) { const mid = (lo + hi) / 2, m = voxelize(t, mid); consider(m); if (m.cells.length > target) lo = mid; else hi = mid; }
+  const s0 = best.s; for (let i = -6; i <= 6; i++) if (i && bestScore > 2) consider(voxelize(t, s0 * (1 + i * 0.02)));
+  while (best.cells.length > max) best.cells.pop();
+  return (voxCache[key] = best);
+}
+
+/* ---------- Tiers & rules ---------- */
+const TIERS = {
+  Beginner: { min: 8, max: 15, lmin: 2, lmax: 4, bias: .25, frac: .8, coins: 10 },
+  Easy: { min: 15, max: 25, lmin: 3, lmax: 6, bias: .4, frac: .6, coins: 15 },
+  Medium: { min: 25, max: 45, lmin: 4, lmax: 9, bias: .55, frac: .45, coins: 20 },
+  Hard: { min: 45, max: 70, lmin: 5, lmax: 13, bias: .7, frac: .38, coins: 30 },
+  Expert: { min: 70, max: 120, lmin: 6, lmax: 18, bias: .8, frac: .32, coins: 40 },
+};
+const ckey = (x, y, z) => (x + 64) * 16384 + (y + 64) * 128 + (z + 64);
+
+class PuzzleState {
+  constructor(pieces) {
+    this.pieces = pieces; this.byId = new Map(pieces.map(p => [p.id, p])); this.occ = new Map(); this.removed = new Set();
+    this.mn = [1e9,1e9,1e9]; this.mx = [-1e9,-1e9,-1e9];
+    for (const p of pieces) { this.occ.set(ckey(p.x, p.y, p.z), p.id); [p.x,p.y,p.z].forEach((v, i) => { this.mn[i] = Math.min(this.mn[i], v); this.mx[i] = Math.max(this.mx[i], v); }); p.ri = p.cycle ? p.cycle.indexOf(p.dir) : 0; }
+  }
+  get remaining() { return this.pieces.length - this.removed.size; }
+  dirOf(p) { return p.cycle ? p.cycle[p.ri] : p.dir; }
+  sweep(p, d) {
+    const v = DIRS[d], ax = axisOf(d); let x = p.x, y = p.y, z = p.z, t = 0;
+    for (;;) {
+      x += v[0]; y += v[1]; z += v[2]; const c = [x, y, z][ax];
+      if (c > this.mx[ax] || c < this.mn[ax]) return { clear: true };
+      const o = this.occ.get(ckey(x, y, z)); if (o !== undefined && o !== p.id) return { clear: false, blocker: o, free: t };
+      t++;
+    }
+  }
+  check(p) {
+    if (p.lock >= 0 && !this.removed.has(p.lock)) return { clear: false, locked: true, blocker: p.lock, free: 0 };
+    return this.sweep(p, this.dirOf(p));
+  }
+  canLeaveSomehow(p) {
+    if (p.lock >= 0 && !this.removed.has(p.lock)) return false;
+    return (p.cycle || [p.dir]).some(d => this.sweep(p, d).clear);
+  }
+  remove(p) { this.removed.add(p.id); this.occ.delete(ckey(p.x, p.y, p.z)); }
+  tap(id) {
+    const p = this.byId.get(id); if (!p || this.removed.has(id)) return { outcome: "ignored" };
+    const dir = this.dirOf(p), chk = this.check(p);
+    if (chk.clear) {
+      const removed = [], unlocked = [], queue = [id]; let first = true;
+      while (queue.length) {
+        const cur = this.byId.get(queue.shift()); if (this.removed.has(cur.id)) continue;
+        if (!first && !this.check(cur).clear) continue; first = false;
+        removed.push({ id: cur.id, dir: this.dirOf(cur) }); this.remove(cur);
+        for (const o of this.pieces) if (o.lock === cur.id && !this.removed.has(o.id)) unlocked.push(o.id);
+        for (const t of cur.chain) queue.push(t);
+      }
+      return { outcome: "removed", removed, unlocked };
+    }
+    if (chk.locked) return { outcome: "locked", key: chk.blocker };
+    if (p.cycle) { p.ri = (p.ri + 1) % p.cycle.length; return { outcome: "rotated", dir: this.dirOf(p) }; }
+    return { outcome: "blocked", dir, blocker: chk.blocker, free: chk.free };
+  }
+  blocksCount(id) { let n = 0; for (const o of this.pieces) { if (o.id === id || this.removed.has(o.id)) continue; const c = this.sweep(o, this.dirOf(o)); if (!c.clear && c.blocker === id) n++; if (o.lock === id) n++; } return n; }
+}
+
+function validate(pieces) {
+  const s = new PuzzleState(pieces.map(p => ({ ...p }))); let layers = 0, initial = 0; const order = [];
+  while (s.remaining) {
+    const free = s.pieces.filter(p => !s.removed.has(p.id) && s.canLeaveSomehow(p));
+    if (!free.length) return { ok: false, layers };
+    if (!layers) initial = free.length; layers++;
+    free.forEach(p => { order.push(p.id); s.remove(p); });
+  }
+  return { ok: true, layers, initial, order };
+}
+
+function generate(spec) {
+  const tier = TIERS[spec.tier], tpl = OBJECTS.find(o => o.id === spec.objectId);
+  const vox = fitToCount(tpl, tier.min, tier.max, spec.target);
+  let best = null, bestScore = 1e9;
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const r = mulberry(spec.seed * 31 + attempt * 7919);
+    const pieces = build(vox, tier, r, spec.mech);
+    const v = validate(pieces); if (!v.ok) continue;
+    const sc = (v.layers < tier.lmin ? tier.lmin - v.layers : 0) + (v.layers > tier.lmax ? v.layers - tier.lmax : 0);
+    if (sc < bestScore) { bestScore = sc; best = { pieces, v }; } if (!sc) break;
+  }
+  return { tpl, vox, pieces: best.pieces, validation: best.v };
+}
+
+function build(vox, tier, r, mech) {
+  const cells = vox.cells, n = cells.length, rem = new Array(n).fill(true), dirs = new Array(n), order = [];
+  const grid = new Map(cells.map((c, i) => [ckey(c.x, c.y, c.z), i]));
+  const mx = [0,1,2].map(i => Math.max(...cells.map(c => [c.x,c.y,c.z][i])));
+  const ray = (i, d) => { const v = DIRS[d]; let { x, y, z } = cells[i], blocks = 0;
+    for (;;) { x += v[0]; y += v[1]; z += v[2]; if (x < 0 || y < 0 || z < 0 || x > mx[0] || y > mx[1] || z > mx[2]) return blocks; const j = grid.get(ckey(x, y, z)); if (j !== undefined) { if (rem[j]) return -1; blocks++; } } };
+  // Peel: every piece gets a direction that is clear of the pieces still remaining => acyclic, solvable by construction.
+  for (let step = 0; step < n; step++) {
+    const cand = []; for (let i = 0; i < n; i++) if (rem[i]) { let f = 0; for (let d = 0; d < 6; d++) if (ray(i, d) >= 0) f++; if (f) cand.push([i, f]); }
+    let pick;
+    if (r() < tier.bias * 0.5) { const mf = Math.min(...cand.map(c => c[1])); const nar = cand.filter(c => c[1] === mf); pick = nar[rint(r, nar.length)][0]; }
+    else pick = cand[rint(r, cand.length)][0];
+    const opts = []; for (let d = 0; d < 6; d++) { const b = ray(pick, d); if (b >= 0) opts.push([d, b]); }
+    let choice;
+    if (r() < tier.bias) { const mb = Math.max(...opts.map(o => o[1])); const c = opts.filter(o => o[1] === mb); choice = c[rint(r, c.length)][0]; }
+    else if (r() < .5) { const mb = Math.min(...opts.map(o => o[1])); const c = opts.filter(o => o[1] === mb); choice = c[rint(r, c.length)][0]; }
+    else choice = opts[rint(r, opts.length)][0];
+    dirs[pick] = choice; order.push(pick); rem[pick] = false;
+  }
+  const pieces = cells.map((c, i) => ({ id: i, x: c.x, y: c.y, z: c.z, dir: dirs[i], pal: c.pal, lock: -1, chain: [], cycle: null }));
+  // Hardening: re-point initially-free pieces into others while it stays solvable.
+  const st = new PuzzleState(pieces), goal = Math.ceil(n * tier.frac);
+  const free = shuffle(pieces.filter(p => st.sweep(p, p.dir).clear), r); let fc = free.length;
+  const fastOk = () => validate(pieces).ok;
+  for (const p of free) { if (fc <= goal) break; const old = p.dir;
+    for (const d of shuffle([0,1,2,3,4,5], r)) { if (d === old || st.sweep(p, d).clear) continue; p.dir = d; if (fastOk()) { fc--; break; } p.dir = old; } }
+  const sol = validate(pieces).order, rank = new Array(n); sol.forEach((id, k) => rank[id] = k);
+  // Special arrows layered on the known solution order (they can never break solvability).
+  const special = new Array(n).fill(false);
+  let L = 0; for (const i of shuffle([...Array(n).keys()], r)) { if (L >= mech.locked) break; if (special[i] || rank[i] < 3) continue;
+    let key = -1, bd = 1e9; for (let j = 0; j < n; j++) { if (j === i || rank[j] >= rank[i] || pieces[j].lock >= 0) continue; const dd = Math.abs(pieces[i].x-pieces[j].x)+Math.abs(pieces[i].y-pieces[j].y)+Math.abs(pieces[i].z-pieces[j].z); if (dd < bd) { bd = dd; key = j; } }
+    if (key < 0 || bd > 4) continue; pieces[i].lock = key; special[i] = special[key] = true; L++; }
+  let C = 0; const st2 = new PuzzleState(pieces.map(p => ({ ...p })));
+  for (const b of shuffle([...Array(n).keys()], r)) { if (C >= mech.chain) break; if (special[b]) continue;
+    const tmp = new PuzzleState(pieces.map(p => ({ ...p }))); let a = -1, ar = -1, guard = 40;
+    while (guard--) { const c = tmp.sweep(tmp.byId.get(b), pieces[b].dir); if (c.clear) break; if (rank[c.blocker] > ar) { ar = rank[c.blocker]; a = c.blocker; } tmp.remove(tmp.byId.get(c.blocker)); }
+    if (a < 0 || special[a]) continue; pieces[a].chain = [b]; special[a] = special[b] = true; C++; }
+  void st2;
+  let R = 0; for (const i of shuffle([...Array(n).keys()], r)) { if (R >= mech.rotating) break; if (special[i]) continue;
+    const p = pieces[i], rotAx = (axisOf(p.dir) + 1 + rint(r, 2)) % 3, cyc = CYCLES[rotAx], idx = cyc.indexOf(p.dir);
+    const start = (idx + 1 + rint(r, 3)) % 4; p.cycle = [0,1,2,3].map(k => cyc[(start + k) % 4]); p.dir = p.cycle[0]; special[i] = true; R++; }
+  return pieces;
+}
+
+/* ---------- 30-level campaign (10 objects x 3 variations) ---------- */
+function tierFor(n) { return n <= 4 ? "Beginner" : n <= 10 ? "Easy" : n <= 18 ? "Medium" : n <= 25 ? "Hard" : "Expert"; }
+const TIER_RANGE = { Beginner: [1,4], Easy: [5,10], Medium: [11,18], Hard: [19,25], Expert: [26,30] };
+const LEVELS = [];
+for (let n = 1; n <= 30; n++) {
+  const tier = tierFor(n), info = TIERS[tier], [f, l] = TIER_RANGE[tier], t = l > f ? (n - f) / (l - f) : .5;
+  const mech = { locked: n >= 7 ? (n === 7 ? 1 : n < 20 ? 2 : 3) : 0, chain: n >= 11 ? (n < 20 ? 2 : 3) : 0, rotating: n >= 18 ? (n === 18 ? 1 : n < 25 ? 2 : 3) : 0 };
+  if (n === 11) mech.locked = 0; if (n === 18) { mech.chain = 0; mech.locked = 1; }
+  LEVELS.push({ n, tier, objectId: OBJECTS[(n - 1) % 10].id, target: Math.round(info.min + (info.max - info.min) * (0.25 + 0.6 * t)), seed: n * 7919 + 0x5E3D, mech,
+    intro: n === 7 ? "Locked pieces sit in a grey cage. They can't move until their key piece (it glows when you tap the cage) has escaped." :
+           n === 11 ? "Gold arrows are chained: when the first escapes, its partner slides out too if its path is clear." :
+           n === 18 ? "Purple arrows rotate. Tap one while it's blocked and it turns to point a new way." : null });
+}
+
+/* =====================================================================
+   SAVE (per-browser, optional)
+   ===================================================================== */
+const SAVE_KEY = "shape-escape-3d-web";
+let save = { coins: 100, hints: 3, done: {}, objects: {}, seen: {} };
+try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); if (s && typeof s === "object") save = Object.assign(save, s); } catch (e) {}
+function persist() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) {} }
+const nextLevel = () => { for (let n = 1; n <= 30; n++) if (!save.done[n]) return n; return 30; };
+
+/* =====================================================================
+   AUDIO — synthesized, starts after the first tap
+   ===================================================================== */
+let actx = null;
+function audio() { if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} } return actx; }
+function tone(freq, dur, type = "sine", vol = .18, to = null, delay = 0) {
+  const ac = audio(); if (!ac) return; const t0 = ac.currentTime + delay, o = ac.createOscillator(), g = ac.createGain();
+  o.type = type; o.frequency.setValueAtTime(freq, t0); if (to) o.frequency.exponentialRampToValueAtTime(to, t0 + dur * .6);
+  g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(vol, t0 + .006); g.gain.exponentialRampToValueAtTime(.0001, t0 + dur);
+  o.connect(g).connect(ac.destination); o.start(t0); o.stop(t0 + dur + .02);
+}
+const PENTA = [0,2,4,7,9,12,14,16,19,21,24];
+const sfx = {
+  remove: c => { const f = 480 * Math.pow(2, PENTA[Math.min(c, PENTA.length - 1)] / 12); tone(f, .2, "sine", .2, f * 1.9); },
+  blocked: () => { tone(170, .18, "triangle", .25, 85); },
+  locked: () => { tone(310, .05, "square", .08); tone(310, .05, "square", .08, null, .09); },
+  unlock: () => { tone(880, .3, "sine", .14); tone(1318, .4, "sine", .14, null, .09); },
+  rotate: () => tone(600, .1, "sine", .14, 1000),
+  hint: () => [784, 988, 1175].forEach((f, i) => tone(f, .35, "sine", .1, null, i * .08)),
+  complete: () => [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, .7, "sine", .14, null, i * .1)),
+};
+
+/* =====================================================================
+   RENDERING
+   ===================================================================== */
+const stage = document.getElementById("stage");
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputEncoding = THREE.sRGBEncoding;
+stage.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(38, 1, .1, 200);
+scene.add(new THREE.HemisphereLight(0xe6e0ff, 0xffd8c8, .75));
+const sun = new THREE.DirectionalLight(0xfff6ea, .85); sun.position.set(-5, 8, 9); sun.castShadow = true;
+sun.shadow.mapSize.set(1024, 1024); Object.assign(sun.shadow.camera, { left: -10, right: 10, top: 10, bottom: -10, near: 1, far: 40 }); sun.shadow.bias = -.002;
+scene.add(sun);
+const root = new THREE.Group(); scene.add(root);           // the object the player rotates
+const shadowBlob = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, map: radialTexture() }));
+shadowBlob.rotation.x = -Math.PI / 2; scene.add(shadowBlob);
+
+function radialTexture() { const c = document.createElement("canvas"); c.width = c.height = 128; const g = c.getContext("2d"), gr = g.createRadialGradient(64,64,0,64,64,64);
+  gr.addColorStop(0, "rgba(90,60,130,.28)"); gr.addColorStop(1, "rgba(90,60,130,0)"); g.fillStyle = gr; g.fillRect(0,0,128,128); return new THREE.CanvasTexture(c); }
+
+// Rounded cube geometry (shared by every piece)
+function roundedBox(size, radius, seg) {
+  const g = new THREE.BoxGeometry(size, size, size, seg, seg, seg), pos = g.attributes.position, h = size / 2, inner = h - radius, v = new THREE.Vector3(), c = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) { v.fromBufferAttribute(pos, i); c.set(Math.max(-inner, Math.min(inner, v.x)), Math.max(-inner, Math.min(inner, v.y)), Math.max(-inner, Math.min(inner, v.z)));
+    v.sub(c); if (v.lengthSq() > 1e-9) v.normalize().multiplyScalar(radius); c.add(v); pos.setXYZ(i, c.x, c.y, c.z); }
+  g.computeVertexNormals(); return g;
+}
+const PIECE_GEO = roundedBox(.9, .12, 6);
+
+// Arrow decal atlas: left half = arrow pointing +u, right half = exit dot.
+const ARROW_TEX = (() => { const c = document.createElement("canvas"); c.width = 256; c.height = 128; const g = c.getContext("2d"); g.fillStyle = "#fff";
+  g.beginPath(); g.roundRect ? g.roundRect(20, 51, 54, 26, 6) : g.rect(20, 51, 54, 26); g.fill();
+  g.beginPath(); g.moveTo(64, 20); g.lineTo(110, 64); g.lineTo(64, 108); g.closePath(); g.lineJoin = "round"; g.lineWidth = 8; g.strokeStyle = "#fff"; g.stroke(); g.fill();
+  g.beginPath(); g.arc(192, 64, 24, 0, Math.PI * 2); g.fill();
+  const t = new THREE.CanvasTexture(c); t.anisotropy = 4; return t; })();
+const arrowGeoCache = {};
+function arrowGeo(d) {
+  if (arrowGeoCache[d]) return arrowGeoCache[d];
+  const pos = [], uv = [], idx = [], t = new THREE.Vector3(...DIRS[d]), off = .457;
+  const quad = (n, u, w, u0, u1) => { const v = new THREE.Vector3().crossVectors(n, u), base = pos.length / 3, c = n.clone().multiplyScalar(off);
+    for (const [a, b] of [[-1,-1],[1,-1],[1,1],[-1,1]]) { const p = c.clone().addScaledVector(u, a * w).addScaledVector(v, b * w); pos.push(p.x, p.y, p.z); uv.push(a < 0 ? u0 : u1, b < 0 ? 0 : 1); }
+    idx.push(base, base+1, base+2, base, base+2, base+3); };
+  for (let f = 0; f < 6; f++) { const n = new THREE.Vector3(...DIRS[f]);
+    if (axisOf(f) !== axisOf(d)) quad(n, t, .4, 0, .5);
+    else if (f === d) quad(n, Math.abs(n.y) > .5 ? new THREE.Vector3(1,0,0) : new THREE.Vector3(0,1,0), .4, .5, 1); }
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx);
+  return (arrowGeoCache[d] = g);
+}
+const matCache = {};
+const bodyMat = hex => matCache["b" + hex] || (matCache["b" + hex] = new THREE.MeshStandardMaterial({ color: hex, roughness: .5, metalness: 0 }));
+const arrowMat = hex => matCache["a" + hex] || (matCache["a" + hex] = new THREE.MeshBasicMaterial({ color: hex, map: ARROW_TEX, transparent: true, side: THREE.DoubleSide, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }));
+const ARROW = { normal: "#2B2D42", locked: "#7d8597", chain: "#C9A227", rotating: "#7B2CBF" };
+const cageGeo = (() => { const g = new THREE.Group(), bar = new THREE.BoxGeometry(1, 1, 1), m = new THREE.MeshStandardMaterial({ color: "#8D99AE", roughness: .3, metalness: .4 }), h = .49, t = .055;
+  for (const s1 of [-1, 1]) for (const s2 of [-1, 1]) for (const [p, sc] of [[[s1*h, s2*h, 0], [t, t, 2*h+t]], [[s1*h, 0, s2*h], [t, 2*h+t, t]], [[0, s1*h, s2*h], [2*h+t, t, t]]]) {
+    const b = new THREE.Mesh(bar, m); b.position.set(...p); b.scale.set(...sc); g.add(b); } return g; })();
+
+function hexMix(hex, toward, k) { const a = new THREE.Color(hex), b = new THREE.Color(toward); return "#" + a.lerp(b, k).getHexString(); }
+
+/* ---------- Smooth reveal model built from the same primitives ---------- */
+function buildModel(tpl) {
+  const g = new THREE.Group();
+  for (const p of tpl.prims) {
+    if (p.role === "carve") continue;
+    const mat = new THREE.MeshStandardMaterial({ color: tpl.palette[p.pal], roughness: .4, side: THREE.DoubleSide });
+    let geo;
+    if (p.s === "box") { geo = roundedBox(1, .12, 3); geo.scale(p.h[0] * 2, p.h[1] * 2, p.h[2] * 2); geo.translate(...p.c); }
+    else if (p.s === "ell") { geo = new THREE.SphereGeometry(1, 28, 18); geo.scale(...p.h); geo.translate(...p.c); }
+    else if (p.s === "fru" || p.s === "tor") {
+      const [A, N, B] = basis(p.ax).map(v => new THREE.Vector3(...v));
+      if (p.s === "fru") {
+        geo = new THREE.CylinderGeometry(p.rp, p.rn, p.hh * 2, 36, 1, !!p.hollow);
+        if (p.hollow) { const inner = new THREE.CylinderGeometry(p.rp * p.hollow, p.rn * p.hollow, p.hh * 2 * (p.hdepth || 1), 36, 1, true);
+          inner.translate(0, p.hh - p.hh * (p.hdepth || 1), 0);
+          const im = new THREE.Mesh(inner, new THREE.MeshStandardMaterial({ color: hexMix(tpl.palette[p.pal], "#000000", .15), roughness: .5, side: THREE.DoubleSide }));
+          im.applyMatrix4(new THREE.Matrix4().makeBasis(A, N, B).setPosition(...p.c)); g.add(im);
+          const ring = new THREE.RingGeometry(p.rp * p.hollow, p.rp, 36); ring.rotateX(-Math.PI / 2); ring.translate(0, p.hh, 0);
+          const rm = new THREE.Mesh(ring, mat); rm.applyMatrix4(new THREE.Matrix4().makeBasis(A, N, B).setPosition(...p.c)); g.add(rm);
+          if ((p.hdepth || 1) < 1) { const fl = new THREE.CircleGeometry(p.rn, 36); fl.rotateX(Math.PI / 2); fl.translate(0, -p.hh, 0);
+            const fm = new THREE.Mesh(fl, mat); fm.applyMatrix4(new THREE.Matrix4().makeBasis(A, N, B).setPosition(...p.c)); g.add(fm); } }
+        geo.applyMatrix4(new THREE.Matrix4().makeBasis(A, N, B));
+      } else {
+        const arc = Math.min(360, p.a1 - p.a0) * Math.PI / 180;
+        geo = new THREE.TorusGeometry(p.R, p.r, 14, 48, arc); geo.rotateZ(p.a0 * Math.PI / 180);
+        geo.applyMatrix4(new THREE.Matrix4().makeBasis(A, B, N));
+      }
+      geo.translate(...p.c);
+    } else {
+      const a = new THREE.Vector3(...p.c), b = new THREE.Vector3(...p.p), len = a.distanceTo(b);
+      const cyl = new THREE.Mesh(new THREE.CylinderGeometry(p.r, p.r, len, 20), mat);
+      cyl.position.copy(a).lerp(b, .5); cyl.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize()); g.add(cyl);
+      for (const e of [a, b]) { const s = new THREE.Mesh(new THREE.SphereGeometry(p.r, 16, 12), mat); s.position.copy(e); g.add(s); }
+      continue;
+    }
+    const m = new THREE.Mesh(geo, mat); m.castShadow = true; g.add(m);
+  }
+  g.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  return g;
+}
+
+/* =====================================================================
+   TWEENS
+   ===================================================================== */
+const tweens = [];
+function tween(dur, update, done, delay = 0) { tweens.push({ t: -delay, dur, update, done }); }
+const easeOutBack = k => { const c1 = 1.70158, c3 = c1 + 1, u = k - 1; return 1 + c3*u*u*u + c1*u*u; };
+const easeOutCubic = k => 1 - Math.pow(1 - k, 3);
+
+/* =====================================================================
+   CAMERA / OBJECT ROTATION
+   ===================================================================== */
+const DEFAULT_Q = new THREE.Quaternion().setFromEuler(new THREE.Euler(.31, -.56, 0, "XYZ"));
+const view = { q: DEFAULT_Q.clone(), dist: 12, target: 12, min: 4, max: 30, fit: 12, radius: 2, spin: 0, vel: new THREE.Vector2(), drag: false, offset: 0, scale: 1, enabled: true };
+function frame(radius, scale = view.scale, offset = view.offset) {
+  view.radius = radius; view.scale = scale; view.offset = offset;
+  const vf = camera.fov * Math.PI / 180, hf = 2 * Math.atan(Math.tan(vf / 2) * camera.aspect), f = Math.min(vf, hf);
+  view.fit = radius / Math.sin(f / 2) / .82 * scale; view.min = Math.max(radius * 1.25 + .2, view.fit * .45); view.max = view.fit * 2.2; view.target = view.fit;
+}
+function rotateBy(dx, dy) {
+  const s = 4.2 / Math.max(320, innerHeight);
+  view.q.premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), dy * s)).premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), dx * s));
+}
+function resetView() { view.q.copy(DEFAULT_Q); view.target = view.fit; view.vel.set(0, 0); }
+
+/* =====================================================================
+   GAME STATE
+   ===================================================================== */
+let game = null;        // current level session
+let mode = "home";      // home | play | complete | viewer
+let combo = 0, lastRemove = 0, hinted = null, hintLine = null, revealModel = null, viewerModel = null;
+
+function clearBoard() {
+  root.clear(); root.quaternion.identity(); game = null; hinted = null; hintLine = null;
+  if (revealModel) revealModel = null;
+}
+
+function loadLevel(n, interactive) {
+  clearBoard();
+  document.getElementById("loading").hidden = false;
+  setTimeout(() => {
+    const spec = LEVELS[n - 1], gen = generate(spec), state = new PuzzleState(gen.pieces.map(p => ({ ...p })));
+    const mx = [0,1,2].map(i => Math.max(...gen.pieces.map(p => [p.x,p.y,p.z][i])));
+    const center = new THREE.Vector3(mx[0] / 2, mx[1] / 2, mx[2] / 2);
+    const radius = .5 * Math.hypot(mx[0] + 1, mx[1] + 1, mx[2] + 1);
+    const meshes = new Map(), chains = [];
+    for (const p of state.pieces) {
+      const g = new THREE.Group(); g.position.set(p.x - center.x, p.y - center.y, p.z - center.z);
+      const realHex = gen.tpl.palette[p.pal], body = new THREE.Mesh(PIECE_GEO, bodyMat(hexMix(realHex, "#dbd9e6", .42)));
+      body.castShadow = body.receiveShadow = true; body.userData.id = p.id; g.add(body);
+      const kind = p.lock >= 0 ? "locked" : p.cycle ? "rotating" : p.chain.length ? "chain" : "normal";
+      const arrow = new THREE.Mesh(arrowGeo(state.dirOf(p)), arrowMat(ARROW[kind])); g.add(arrow);
+      let cage = null; if (p.lock >= 0) { cage = cageGeo.clone(); g.add(cage); }
+      g.userData = { id: p.id, home: g.position.clone(), body, arrow, cage, realHex, kind };
+      root.add(g); meshes.set(p.id, g);
+    }
+    for (const p of state.pieces) for (const t of p.chain) {
+      const link = new THREE.Mesh(new THREE.CylinderGeometry(.06, .06, 1, 8), new THREE.MeshStandardMaterial({ color: "#C9A227", metalness: .5, roughness: .3 }));
+      root.add(link); chains.push({ a: p.id, b: t, link }); meshes.get(t).userData.arrow.material = arrowMat(ARROW.chain);
+    }
+    game = { n, spec, gen, state, meshes, chains, center, radius, taps: 0, blocked: 0, hints: 0, start: performance.now(), interactive, done: false };
+    shadowBlob.position.set(0, -radius * .95, 0); shadowBlob.scale.set(radius * 2.6, radius * 1.6, 1); shadowBlob.visible = true;
+    if (mode === "home") frame(radius, 1.45, .32); else frame(radius, 1, .04);
+    view.dist = view.target; resetView(); root.quaternion.copy(view.q); view.spin = interactive ? 0 : 12;
+    // Intro: pieces fly in from slightly outside.
+    for (const g of meshes.values()) { const h = g.userData.home, out = h.clone().normalize().multiplyScalar(1.6); g.scale.setScalar(0);
+      tween(.35, k => { const e = easeOutCubic(k); g.position.copy(h).addScaledVector(out, 1 - e); g.scale.setScalar(.3 + .7 * e); }, null, .3 * Math.min(1, h.length() / radius)); }
+    document.getElementById("loading").hidden = true;
+    if (interactive) startPlaying();
+    refreshHud();
+  }, 30);
+}
+
+function startPlaying() {
+  if (!game) return;
+  game.interactive = true; game.start = performance.now(); view.spin = 0; frame(game.radius, 1, .04); resetView();
+  show("hud"); refreshHud();
+  if (game.n === 1 && !save.seen.basic) setTip("Tap a piece to slide it out along its arrow", 0);
+  else if (game.spec.intro && !save.seen["intro" + game.n]) { setTip(game.spec.intro, 7000); save.seen["intro" + game.n] = 1; persist(); }
+  else setTip("");
+}
+
+function refreshHud() {
+  if (!game) return;
+  const total = game.state.pieces.length, left = game.state.remaining;
+  document.getElementById("hudLevel").textContent = "Level " + game.n;
+  document.getElementById("hudTier").textContent = "??? · " + game.spec.tier;
+  document.getElementById("hudLeft").textContent = left + " left";
+  document.getElementById("hudBar").style.width = (100 * (1 - left / total)) + "%";
+  document.getElementById("hintCount").textContent = save.hints > 0 ? save.hints : "+";
+  const m = game.spec.mech, legend = [];
+  if (m.locked) legend.push('<span><i style="background:#8D99AE"></i>Caged = locked</span>');
+  if (m.chain) legend.push('<span><i style="background:#C9A227"></i>Gold = chained</span>');
+  if (m.rotating) legend.push('<span><i style="background:#7B2CBF"></i>Purple = rotates</span>');
+  document.getElementById("legend").innerHTML = legend.join("");
+}
+
+function pieceWorld(id) { return game.meshes.get(id); }
+
+function onTap(id) {
+  if (!game || !game.interactive || game.done) return;
+  clearHint(); game.taps++;
+  const res = game.state.tap(id), g = pieceWorld(id);
+  if (res.outcome === "removed") {
+    if (performance.now() - lastRemove > 2500) combo = 0; lastRemove = performance.now();
+    res.removed.forEach((r, i) => setTimeout(() => removePiece(r.id, r.dir, combo++), i * 90));
+    res.unlocked.forEach(uid => { const c = pieceWorld(uid).userData; if (c.cage) { const cage = c.cage; tween(.35, k => cage.scale.setScalar((1 + .6 * k) * (1 - k * k)), () => { cage.visible = false; c.arrow.material = arrowMat(ARROW.normal); }); } });
+    if (res.unlocked.length) sfx.unlock();
+    if (game.n === 1 && !save.seen.basic) { save.seen.basic = 1; persist(); setTip("Drag to rotate · Pinch or scroll to zoom", 3500); }
+    refreshHud();
+    if (game.state.remaining === 0) complete();
+  } else if (res.outcome === "blocked") {
+    game.blocked++; combo = 0; bump(g, res.dir, res.free); sfx.blocked(); buzz(20);
+    setTimeout(() => { const b = pieceWorld(res.blocker); if (b) flash(b); }, 60 + 45 * res.free);
+    if (game.n === 1 && game.blocked === 1) setTip("Blocked! Free the way first, then try again.", 2600);
+  } else if (res.outcome === "locked") {
+    game.blocked++; shake(g); sfx.locked(); buzz(20); const key = pieceWorld(res.key); if (key) pulse(key, 900);
+  } else if (res.outcome === "rotated") {
+    g.userData.arrow.geometry = arrowGeo(res.dir); tween(.3, k => g.userData.arrow.scale.setScalar(.4 + .6 * easeOutBack(k))); sfx.rotate();
+  }
+}
+
+function removePiece(id, dir, c) {
+  const g = pieceWorld(id), v = new THREE.Vector3(...DIRS[dir]), start = g.position.clone(), travel = game.radius * 2 + 6;
+  sfx.remove(c); buzz(8);
+  game.chains = game.chains.filter(ch => { if (ch.a === id || ch.b === id) { root.remove(ch.link); return false; } return true; });
+  g.userData.removed = true;
+  tween(.42, k => { const s = k < .12 ? -.06 * Math.sin(k / .12 * Math.PI) : Math.pow((k - .12) / .88, 3) * travel; g.position.copy(start).addScaledVector(v, s); g.scale.setScalar(k > .7 ? 1 - (k - .7) / .3 * .8 : 1); }, () => { g.visible = false; });
+}
+function bump(g, dir, free) {
+  const v = new THREE.Vector3(...DIRS[dir]), h = g.userData.home, reach = free + .16, out = .05 + .045 * reach;
+  tween(out, k => g.position.copy(h).addScaledVector(v, reach * k * k), () => tween(.2, k => g.position.copy(h).addScaledVector(v, reach * (1 - easeOutBack(k)))));
+}
+function shake(g) { const h = g.userData.home; tween(.3, k => { g.position.copy(h); g.position.x += Math.sin(k * Math.PI * 6) * .07 * (1 - k); }); }
+function flash(g) { const b = g.userData.body, old = b.material; b.material = bodyMat(hexMix(old.color.getHexString ? "#" + old.color.getHexString() : "#ffffff", "#FF5A5F", .7));
+  tween(.28, k => g.scale.setScalar(1 + .07 * Math.sin(k * Math.PI)), () => { b.material = old; g.scale.setScalar(1); }); }
+function pulse(g, ms) { const b = g.userData.body, old = b.material; b.material = bodyMat(hexMix("#" + old.color.getHexString(), "#ffffff", .5)); g.userData.pulse = true;
+  setTimeout(() => { if (g.userData.pulse) { b.material = old; g.userData.pulse = false; g.scale.setScalar(1); } }, ms); g.userData.pulseOld = old; }
+function buzz(ms) { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} }
+
+/* ---------- Hints ---------- */
+function useHint() {
+  if (!game || !game.interactive || game.done) return;
+  if (save.hints <= 0) { if (save.coins >= 60) { save.coins -= 60; save.hints++; toast("Bought a hint for 60 coins"); } else { toast("No hints left. Earn coins by solving levels."); return; } }
+  const st = game.state; let best = null, bs = -1;
+  for (const p of st.pieces) { if (st.removed.has(p.id) || !st.check(p).clear) continue; const s = st.blocksCount(p.id); if (s > bs) { bs = s; best = p; } }
+  let rotateHint = false;
+  if (!best) { best = st.pieces.find(p => !st.removed.has(p.id) && p.cycle && st.canLeaveSomehow(p)); rotateHint = true; }
+  if (!best) return;
+  save.hints--; game.hints++; persist(); refreshHud(); sfx.hint();
+  const g = pieceWorld(best.id); hinted = g; pulse(g, 1e9);
+  // Turn the object so an arrow face of that piece looks at the player.
+  const d = st.dirOf(best), out = g.userData.home.clone().normalize(); let face = null, fs = -9;
+  for (let f = 0; f < 6; f++) if (axisOf(f) !== axisOf(d)) { const n = new THREE.Vector3(...DIRS[f]), s = n.dot(out); if (s > fs) { fs = s; face = n; } }
+  const cur = face.clone().applyQuaternion(view.q), q = new THREE.Quaternion().setFromUnitVectors(cur, new THREE.Vector3(0, 0, 1));
+  view.q.premultiply(q).premultiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(.24, -.2, 0))); view.vel.set(0, 0);
+  if (!rotateHint) { const len = game.radius * 1.4 + 1.5, v = new THREE.Vector3(...DIRS[d]);
+    hintLine = new THREE.Mesh(new THREE.CylinderGeometry(.07, .07, len, 10), new THREE.MeshBasicMaterial({ color: "#FFD166", transparent: true, opacity: .8 }));
+    hintLine.position.copy(g.userData.home).addScaledVector(v, .55 + len / 2); hintLine.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), v); root.add(hintLine); }
+  setTip(rotateHint ? "Tap the glowing piece to turn its arrow" : "Try the glowing piece", 2500);
+}
+function clearHint() {
+  if (hinted) { hinted.userData.pulse = false; hinted.userData.body.material = hinted.userData.pulseOld; hinted.scale.setScalar(1); hinted = null; }
+  if (hintLine) { root.remove(hintLine); hintLine = null; }
+}
+
+/* ---------- Completion: reconstruction + reveal ---------- */
+const confetti = (() => { const N = 160, geo = new THREE.BufferGeometry(), pos = new Float32Array(N * 3), col = new Float32Array(N * 3);
+  geo.setAttribute("position", new THREE.BufferAttribute(pos, 3)); geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
+  const pts = new THREE.Points(geo, new THREE.PointsMaterial({ size: .22, vertexColors: true, transparent: true })); pts.visible = false; scene.add(pts);
+  return { pts, pos, col, vel: new Float32Array(N * 3), life: 0, N }; })();
+function burst(radius) {
+  const c = confetti, cols = ["#FF6B6B","#FFD166","#06D6A0","#4ECDC4","#7B61FF","#FF8FAB"].map(h => new THREE.Color(h));
+  for (let i = 0; i < c.N; i++) { c.pos.set([0, -radius * .4, 0], i * 3); const a = Math.random() * Math.PI * 2, s = 5 + Math.random() * 6;
+    c.vel.set([Math.cos(a) * s * .45, 6 + Math.random() * 6, Math.sin(a) * s * .45], i * 3); const k = cols[i % cols.length]; c.col.set([k.r, k.g, k.b], i * 3); }
+  c.pts.geometry.attributes.color.needsUpdate = true; c.life = 2.2; c.pts.visible = true;
+}
+
+function complete() {
+  game.done = true; game.interactive = false; const g = game; const secs = (performance.now() - g.start) / 1000;
+  const firstClear = !save.done[g.n], stars = Math.max(1, 3 - (g.blocked > Math.max(2, g.state.pieces.length / 6) ? 1 : 0) - (g.hints ? 1 : 0));
+  const coins = firstClear ? TIERS[g.spec.tier].coins + (stars - 1) * 5 : Math.max(3, TIERS[g.spec.tier].coins / 4 | 0);
+  const isNew = !save.objects[g.spec.objectId];
+  save.done[g.n] = Math.max(save.done[g.n] || 0, stars); save.objects[g.spec.objectId] = 1; save.coins += coins;
+  let bonus = 0; const solved = Object.keys(save.done).length; if (firstClear && solved % 3 === 0) { save.hints++; bonus = 1; }
+  persist();
+  setTimeout(() => {
+    resetView(); setTip("");
+    // 1) Reconstruction in true colours.
+    const list = [...g.meshes.values()].sort((a, b) => a.userData.home.y - b.userData.home.y);
+    list.forEach((m, i) => { m.visible = true; m.userData.arrow.visible = false; if (m.userData.cage) m.userData.cage.visible = false; m.userData.body.material = bodyMat(m.userData.realHex);
+      const h = m.userData.home, from = h.clone().addScaledVector(h.clone().normalize(), g.radius * 1.6).add(new THREE.Vector3(0, 2, 0));
+      m.scale.setScalar(0); tween(.4, k => { const e = easeOutCubic(k); m.position.lerpVectors(from, h, e); m.scale.setScalar(.3 + .7 * e); }, null, .9 * i / list.length); });
+    g.chains.forEach(ch => root.remove(ch.link));
+    // 2) Morph into the smooth model.
+    setTimeout(() => {
+      const model = buildModel(g.gen.tpl), inv = 1 / g.gen.vox.s, o = g.gen.vox.origin;
+      model.scale.setScalar(inv * .6); model.position.set(-o[0] * inv - g.center.x, -o[1] * inv - g.center.y, -o[2] * inv - g.center.z);
+      root.add(model); revealModel = model; sfx.complete(); buzz(40); burst(g.radius); view.spin = 22;
+      tween(.55, k => { model.scale.setScalar(inv * (.6 + .4 * easeOutBack(k))); const s = 1 - Math.pow(Math.min(1, k * 1.6), 3); list.forEach(m => m.scale.setScalar(s)); }, () => list.forEach(m => m.visible = false));
+      frame(g.radius, 1.4, .38);
+      setTimeout(() => {
+        const tpl = g.gen.tpl;
+        document.getElementById("cHead").textContent = ["Brilliant!", "Wonderful!", "Superb!", "Nicely done!"][Math.random() * 4 | 0];
+        document.getElementById("cName").textContent = tpl.name;
+        const nc = document.getElementById("cNew"); nc.hidden = !isNew; nc.textContent = "New in " + tpl.room + "!";
+        document.getElementById("cStars").innerHTML = [0,1,2].map(i => `<span class="${i < stars ? "on" : "off"}">★</span>`).join("");
+        document.getElementById("cCoins").textContent = "🪙 +" + coins;
+        document.getElementById("cExtra").textContent = `${Math.round(secs)}s · ${g.taps} taps` + (bonus ? " · +1 free hint" : "") + (g.n === 30 && firstClear ? " · You solved every object!" : "");
+        document.getElementById("nextBtn").textContent = g.n < 30 ? "Next: Level " + (g.n + 1) : "Back to Home";
+        mode = "complete"; show("complete");
+      }, 900);
+    }, 1350);
+  }, 450);
+}
+
+/* =====================================================================
+   UI
+   ===================================================================== */
+const screens = ["home", "hud", "complete", "viewer"];
+function show(id) { screens.forEach(s => document.getElementById(s).hidden = s !== id); updateHome(); }
+function updateHome() {
+  const n = nextLevel(); document.getElementById("homeLevel").textContent = `Level ${n} · ${LEVELS[n - 1].tier}`;
+  document.getElementById("coinsHome").textContent = "🪙 " + save.coins;
+  document.getElementById("levelsStat").textContent = Object.keys(save.done).length + " / 30 solved";
+  document.getElementById("collStat").textContent = Object.keys(save.objects).length + " / 10 objects";
+}
+let tipTimer = 0;
+function setTip(text, ms) { const t = document.getElementById("tip"); clearTimeout(tipTimer); t.textContent = text; t.style.opacity = text ? 1 : 0; if (text && ms) tipTimer = setTimeout(() => t.style.opacity = 0, ms); }
+let toastTimer = 0;
+function toast(text) { const t = document.getElementById("toast"); t.textContent = text; t.style.opacity = 1; clearTimeout(toastTimer); toastTimer = setTimeout(() => t.style.opacity = 0, 2200); }
+
+function goHome() {
+  mode = "home"; if (viewerModel) { root.remove(viewerModel); viewerModel = null; } show("home");
+  loadLevel(nextLevel(), false);
+}
+function play(n) { mode = "play"; show("hud"); if (game && game.n === n && !game.interactive && !game.done) startPlaying(); else loadLevel(n, true); }
+
+document.getElementById("playBtn").onclick = () => { audio(); play(nextLevel()); };
+document.getElementById("homeBtn").onclick = goHome;
+document.getElementById("cHomeBtn").onclick = goHome;
+document.getElementById("resetBtn").onclick = resetView;
+document.getElementById("restartBtn").onclick = () => { if (game) loadLevel(game.n, true); };
+document.getElementById("hintBtn").onclick = useHint;
+document.getElementById("nextBtn").onclick = () => { if (!game) return; if (game.n < 30) play(game.n + 1); else goHome(); };
+document.querySelectorAll("[data-close]").forEach(b => b.onclick = () => b.closest(".overlay").hidden = true);
+document.getElementById("levelsBtn").onclick = () => {
+  const nx = nextLevel(), grid = document.getElementById("levelGrid");
+  grid.innerHTML = LEVELS.map(l => { const d = save.done[l.n], locked = l.n > nx && !d;
+    return `<button class="lvl ${d ? "done" : l.n === nx ? "next" : ""}" data-n="${l.n}" ${locked ? "disabled" : ""}>${l.n}<small>${d ? "★".repeat(d) : OBJECTS[(l.n - 1) % 10].name.split(" ")[0]}</small></button>`; }).join("");
+  grid.querySelectorAll("button").forEach(b => b.onclick = () => { document.getElementById("levelsPanel").hidden = true; audio(); play(+b.dataset.n); });
+  document.getElementById("levelsPanel").hidden = false;
+};
+document.getElementById("collBtn").onclick = () => {
+  const grid = document.getElementById("collGrid");
+  grid.innerHTML = OBJECTS.map((o, i) => { const have = save.objects[o.id];
+    return `<button class="obj" data-id="${o.id}" ${have ? "" : "disabled"}><div class="sw" style="background:${have ? o.palette[0] : "#d9d6e6"}">${have ? "" : "?"}</div><b>${have ? o.name : "???"}</b><span>${have ? o.room : "Solve level " + (i + 1)}</span></button>`; }).join("");
+  grid.querySelectorAll("button:not(:disabled)").forEach(b => b.onclick = () => { document.getElementById("collPanel").hidden = true; openViewer(b.dataset.id); });
+  document.getElementById("collPanel").hidden = false;
+};
+document.getElementById("viewerBack").onclick = goHome;
+function openViewer(id) {
+  const tpl = OBJECTS.find(o => o.id === id); clearBoard(); mode = "viewer";
+  const model = buildModel(tpl), { mn, mx } = solidBounds(tpl), size = Math.max(mx[1] - mn[1], Math.max(mx[0] - mn[0], mx[2] - mn[2]) * .8), s = 2.4 / size;
+  model.scale.setScalar(s); model.position.set(-(mn[0] + mx[0]) / 2 * s, -(mn[1] + mx[1]) / 2 * s, -(mn[2] + mx[2]) / 2 * s);
+  viewerModel = new THREE.Group(); viewerModel.add(model); root.add(viewerModel);
+  frame(1.7, 1.05, .05); resetView(); view.spin = 14; shadowBlob.position.set(0, -1.6, 0); shadowBlob.scale.set(4, 2.4, 1);
+  document.getElementById("vName").textContent = tpl.name; document.getElementById("vInfo").textContent = tpl.room;
+  viewerModel.scale.setScalar(0); tween(.45, k => viewerModel && viewerModel.scale.setScalar(easeOutBack(k)));
+  show("viewer");
+}
+
+/* =====================================================================
+   INPUT — tap, drag-rotate with inertia, pinch / wheel zoom
+   ===================================================================== */
+const pointers = new Map(); let downAt = 0, downPos = null, dragging = false, pinchDist = 0, lastMove = 0;
+const ray = new THREE.Raycaster();
+const canvas = renderer.domElement;
+const userControl = () => mode === "play" || mode === "viewer" || mode === "complete";
+canvas.addEventListener("pointerdown", e => { canvas.setPointerCapture(e.pointerId); pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pointers.size === 1) { downAt = performance.now(); downPos = { x: e.clientX, y: e.clientY }; dragging = false; view.vel.set(0, 0); }
+  if (pointers.size === 2) { const [a, b] = [...pointers.values()]; pinchDist = Math.hypot(a.x - b.x, a.y - b.y); } });
+canvas.addEventListener("pointermove", e => { const p = pointers.get(e.pointerId); if (!p) return;
+  const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY;
+  if (!userControl()) return;
+  if (pointers.size >= 2) { const [a, b] = [...pointers.values()], d = Math.hypot(a.x - b.x, a.y - b.y); if (pinchDist > 0) view.target = Math.min(view.max, Math.max(view.min, view.target * pinchDist / d)); pinchDist = d; dragging = true; return; }
+  if (!dragging && Math.hypot(e.clientX - downPos.x, e.clientY - downPos.y) > 8) dragging = true;
+  if (dragging) { rotateBy(dx, dy); const now = performance.now(), dt = Math.max(8, now - lastMove) / 1000; lastMove = now; view.vel.lerp(new THREE.Vector2(dx / dt, dy / dt), .5); view.drag = true; } });
+const endPointer = e => { if (!pointers.has(e.pointerId)) return; pointers.delete(e.pointerId);
+  if (pointers.size === 0) { view.drag = false;
+    if (!dragging && performance.now() - downAt < 350 && mode === "play") pick(e.clientX, e.clientY);
+    if (performance.now() - lastMove > 80) view.vel.set(0, 0); } };
+canvas.addEventListener("pointerup", endPointer); canvas.addEventListener("pointercancel", endPointer);
+canvas.addEventListener("wheel", e => { e.preventDefault(); if (userControl()) view.target = Math.min(view.max, Math.max(view.min, view.target * (1 + Math.sign(e.deltaY) * .1))); }, { passive: false });
+function pick(x, y) {
+  if (!game) return; const r = canvas.getBoundingClientRect();
+  ray.setFromCamera({ x: (x - r.left) / r.width * 2 - 1, y: -(y - r.top) / r.height * 2 + 1 }, camera);
+  const bodies = [...game.meshes.values()].filter(m => !m.userData.removed).map(m => m.userData.body);
+  const hit = ray.intersectObjects(bodies, false)[0]; if (hit) onTap(hit.object.userData.id);
+}
+
+/* =====================================================================
+   LOOP
+   ===================================================================== */
+function resize() { const w = stage.clientWidth, h = stage.clientHeight; renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix(); if (game) frame(view.radius); else if (viewerModel) frame(1.7); }
+addEventListener("resize", resize); resize();
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(.05, (now - last) / 1000); last = now;
+  for (let i = tweens.length - 1; i >= 0; i--) { const t = tweens[i]; t.t += dt; if (t.t < 0) continue; const k = Math.min(1, t.t / t.dur); t.update(k); if (k >= 1) { tweens.splice(i, 1); t.done && t.done(); } }
+  if (!view.drag && view.vel.lengthSq() > 1) { rotateBy(view.vel.x * dt, view.vel.y * dt); view.vel.multiplyScalar(Math.exp(-4.5 * dt)); }
+  if (view.spin && !view.drag) view.q.premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), view.spin * Math.PI / 180 * dt));
+  root.quaternion.slerp(view.q, 1 - Math.exp(-18 * dt));
+  view.dist += (view.target - view.dist) * (1 - Math.exp(-12 * dt));
+  camera.position.set(0, -view.offset * view.radius, view.dist); camera.lookAt(0, -view.offset * view.radius, 0);
+  if (hinted) hinted.scale.setScalar(1 + .08 * (.5 + .5 * Math.sin(now / 140)));
+  if (game) for (const ch of game.chains) { const a = pieceWorld(ch.a).position, b = pieceWorld(ch.b).position, len = a.distanceTo(b);
+    ch.link.position.lerpVectors(a, b, .5); ch.link.scale.set(1, Math.max(.01, len), 1); ch.link.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize()); }
+  const c = confetti; if (c.life > 0) { c.life -= dt; for (let i = 0; i < c.N; i++) { c.vel[i*3+1] -= 14 * dt; for (let j = 0; j < 3; j++) c.pos[i*3+j] += c.vel[i*3+j] * dt; }
+    c.pts.geometry.attributes.position.needsUpdate = true; c.pts.material.opacity = Math.min(1, c.life); if (c.life <= 0) c.pts.visible = false; }
+  renderer.render(scene, camera);
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+goHome();
+</script>
