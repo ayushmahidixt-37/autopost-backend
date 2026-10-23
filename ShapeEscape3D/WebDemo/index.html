@@ -84,6 +84,18 @@ button:focus-visible { outline: 3px solid var(--violet); outline-offset: 3px; }
 .hint-txt { color: var(--ink-soft); font-weight: 700; font-size: 14px; }
 #viewer .top { text-align: center; }
 #viewer h3 { font-family: var(--display); font-size: 32px; margin: 4px 0 0; }
+#home .cards button { position: relative; }
+.dot { position: absolute; top: 10px; right: 12px; width: 12px; height: 12px; border-radius: 50%; background: var(--coral); }
+.daily-card { background: linear-gradient(160deg, #f3efff, #fff1ea); border-radius: 24px; padding: 18px; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; }
+.daily-card .date { font-family: var(--display); font-size: 26px; font-weight: 600; }
+.daily-card .special { color: var(--violet); font-weight: 800; font-size: 14px; }
+.daily-card .btn { margin-top: 8px; width: 100%; }
+.done-txt { color: #07a37b; font-weight: 800; }
+.streak { display: flex; justify-content: space-between; align-items: center; gap: 10px; background: #f6f4fb; border-radius: 18px; padding: 12px 16px; margin: 12px 0; font-weight: 800; flex-wrap: wrap; }
+.streak small { color: var(--ink-soft); }
+.panel h4 { font-family: var(--display); font-size: 18px; margin: 6px 0; }
+.hist { display: flex; justify-content: space-between; gap: 10px; padding: 10px 4px; border-bottom: 1px solid #ece9f5; font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.hist span:last-child { color: var(--ink-soft); white-space: nowrap; }
 #toast { position: absolute; left: 50%; top: 90px; transform: translateX(-50%); background: rgba(43,45,66,.9); color: #fff; padding: 10px 16px; border-radius: 16px; font-weight: 700; opacity: 0; transition: opacity .25s; pointer-events: none; max-width: 90vw; text-align: center; }
 #loading { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--display); font-size: 22px; color: var(--ink-soft); pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { .btn, .bar i { transition: none; } }
@@ -106,7 +118,8 @@ button:focus-visible { outline: 3px solid var(--violet); outline-offset: 3px; }
       <button class="btn primary play" id="playBtn">PLAY</button>
       <div class="cards">
         <button id="levelsBtn"><strong>Levels</strong><span id="levelsStat">0 / 30 solved</span></button>
-        <button id="collBtn"><strong>Collection</strong><span id="collStat">0 / 10 objects</span></button>
+        <button id="dailyBtn"><i class="dot" id="dailyDot"></i><strong>Daily</strong><span id="dailyStat">+50</span></button>
+        <button id="collBtn"><strong>Collection</strong><span id="collStat">0 / 16 objects</span></button>
       </div>
     </div>
   </section>
@@ -156,6 +169,21 @@ button:focus-visible { outline: 3px solid var(--violet); outline-offset: 3px; }
   </div>
   <div id="collPanel" class="overlay" hidden>
     <div class="panel"><header><h3>Collection</h3><button class="icon-btn" data-close aria-label="Close">✕</button></header><div class="body"><p class="hint-txt" style="margin-top:0">Solve an object once to add it here. Tap a collected object to inspect it in 3D.</p><div class="coll" id="collGrid"></div></div></div>
+  </div>
+  <div id="dailyPanel" class="overlay" hidden>
+    <div class="panel"><header><h3>Daily Challenge</h3><button class="icon-btn" data-close aria-label="Close">✕</button></header><div class="body">
+      <div class="daily-card">
+        <div class="date" id="dDate">Today</div>
+        <div class="hint-txt" id="dTier">Medium</div>
+        <div class="coins" id="dReward">🪙 +50</div>
+        <div class="special" id="dSpecial"></div>
+        <button class="btn primary" id="dPlay">Play today's puzzle</button>
+        <div class="done-txt" id="dDone" hidden></div>
+      </div>
+      <div class="streak"><span id="dStreak">🔥 0-day streak</span><small id="dBest">Best: 0</small></div>
+      <p class="hint-txt" style="margin:0 0 6px">One new puzzle every day, the same for every player. Solving on consecutive days grows your streak, raises the reward and makes puzzles harder. Every third day features a daily-only collectible.</p>
+      <h4>History</h4><div id="dHistory"></div>
+    </div></div>
   </div>
   <div id="toast"></div>
 </div>
@@ -299,7 +327,30 @@ const OBJECTS = [
   { id: "washing_machine", name: "Washing Machine", room: "Garage", palette: ["#E9F1F7","#A8DADC","#457B9D","#BDE0FE","#E63946"], prims: [
     To([0,-0.15,0.72], Z, 0.5, 0.18, 2), Bx([0,0.82,0.74],[0.85,0.16,0.08],1), Bx([0,0,0],[0.85,1.0,0.75],0),
     rev(Cy([0,-0.15,0.78], Z, 0.42, 0.03, 3)), rev(Cy([0.55,0.82,0.83], Z, 0.1, 0.04, 4)), rev(Bx([-0.35,0.82,0.83],[0.3,0.07,0.02],2)) ] },
+  // Daily-challenge exclusives
+  { id: "teapot", name: "Teapot", room: "Kitchen", daily: true, palette: ["#F4A261","#E76F51"], prims: [
+    Sp([0,0.95,0],0.13,1), Fr([0,0.7,0], Y, 0.48, 0.3, 0.12, 1), To([-0.9,0.05,0], Z, 0.38, 0.11, 1, 90, 270),
+    Ca([0.75,-0.1,0],[1.3,0.45,0],0.14,0), El([0,0,0],[0.9,0.7,0.9],0) ] },
+  { id: "toy_robot", name: "Toy Robot", room: "Toys", daily: true, palette: ["#90BE6D","#F9C74F","#F94144","#577590"], prims: [
+    Sp([0,1.36,0],0.12,2), Ca([0,1.05,0],[0,1.3,0],0.06,3), Bx([0,0.75,0],[0.42,0.32,0.35],1),
+    Bx([0.82,-0.05,0],[0.16,0.45,0.16],1), Bx([-0.82,-0.05,0],[0.16,0.45,0.16],1), Bx([0,-0.1,0],[0.6,0.55,0.4],0),
+    Bx([0.28,-0.95,0],[0.18,0.32,0.2],3), Bx([-0.28,-0.95,0],[0.18,0.32,0.2],3), rev(Sp([0.17,0.8,0.36],0.08,2)), rev(Sp([-0.17,0.8,0.36],0.08,2)) ] },
+  { id: "retro_radio", name: "Retro Radio", room: "Living Room", daily: true, palette: ["#E9C46A","#264653","#E76F51"], prims: [
+    Cy([-0.45,-0.05,0.42], Z, 0.4, 0.06, 1), Cy([0.55,0.1,0.42], Z, 0.22, 0.06, 2), To([0,0.62,0], Z, 0.55, 0.08, 1, 0, 180),
+    Ca([0.8,0.6,0],[1.2,1.35,0],0.06,1), Bx([0,0,0],[1.1,0.65,0.4],0), Bx([0.75,-0.72,0],[0.12,0.08,0.2],1), Bx([-0.75,-0.72,0],[0.12,0.08,0.2],1) ] },
+  { id: "desk_fan", name: "Desk Fan", room: "Office", daily: true, palette: ["#6D597A","#B56576","#EAAC8B"], prims: [
+    Sp([0,0.35,0.02],0.13,1), El([0.38,0.35,0],[0.3,0.12,0.05],2), El([-0.38,0.35,0],[0.3,0.12,0.05],2),
+    El([0,0.73,0],[0.12,0.3,0.05],2), El([0,-0.03,0],[0.12,0.3,0.05],2), To([0,0.35,0], Z, 0.78, 0.09, 1),
+    Cy([0,0.35,-0.28], Z, 0.24, 0.2, 0), Ca([0,-1.0,-0.2],[0,0.15,-0.25],0.1,0), Cy([0,-1.05,-0.2], Y, 0.55, 0.09, 0) ] },
+  { id: "laptop", name: "Laptop", room: "Electronics", daily: true, palette: ["#ADB5BD","#495057","#90E0EF","#6C757D"], prims: [
+    Bx([0,-0.4,0],[1.0,0.1,0.7],0), Bx([0,0.28,-0.66],[1.0,0.66,0.08],1), rev(Bx([0,0.3,-0.57],[0.9,0.56,0.01],2)),
+    rev(Bx([0,-0.29,0],[0.85,0.01,0.4],3)), rev(Bx([0,-0.29,0.52],[0.25,0.01,0.12],3)) ] },
+  { id: "toolbox", name: "Toolbox", room: "Garage", daily: true, palette: ["#E63946","#A4161A","#6C757D","#FFD166"], prims: [
+    To([0,0.58,0], Z, 0.36, 0.08, 2, 0, 180), Bx([0,0.5,0],[1.02,0.09,0.52],1), Bx([0,-0.05,0],[1.0,0.5,0.5],0),
+    rev(Bx([0.6,0.3,0.53],[0.1,0.08,0.03],3)), rev(Bx([-0.6,0.3,0.53],[0.1,0.08,0.03],3)) ] },
 ];
+const CAMPAIGN_IDS = OBJECTS.filter(o => !o.daily).map(o => o.id);
+const DAILY_IDS = OBJECTS.filter(o => o.daily).map(o => o.id);
 
 /* ---------- Voxelizer ---------- */
 function voxelize(t, s) {
@@ -430,7 +481,7 @@ function build(vox, tier, r, mech) {
     else choice = opts[rint(r, opts.length)][0];
     dirs[pick] = choice; order.push(pick); rem[pick] = false;
   }
-  const pieces = cells.map((c, i) => ({ id: i, x: c.x, y: c.y, z: c.z, dir: dirs[i], pal: c.pal, lock: -1, chain: [], cycle: null }));
+  const pieces = cells.map((c, i) => ({ id: i, x: c.x, y: c.y, z: c.z, dir: dirs[i], pal: c.pal, lock: -1, chain: [], cycle: null, hidden: false }));
   // Hardening: re-point initially-free pieces into others while it stays solvable.
   const st = new PuzzleState(pieces), goal = Math.ceil(n * tier.frac);
   const free = shuffle(pieces.filter(p => st.sweep(p, p.dir).clear), r); let fc = free.length;
@@ -452,6 +503,9 @@ function build(vox, tier, r, mech) {
   let R = 0; for (const i of shuffle([...Array(n).keys()], r)) { if (R >= mech.rotating) break; if (special[i]) continue;
     const p = pieces[i], rotAx = (axisOf(p.dir) + 1 + rint(r, 2)) % 3, cyc = CYCLES[rotAx], idx = cyc.indexOf(p.dir);
     const start = (idx + 1 + rint(r, 3)) % 4; p.cycle = [0,1,2,3].map(k => cyc[(start + k) % 4]); p.dir = p.cycle[0]; special[i] = true; R++; }
+  // Hidden arrows: purely visual, so they never affect solvability. Mid-solution pieces matter most.
+  let H = 0; for (const i of shuffle([...Array(n).keys()], r)) { if (H >= (mech.hidden || 0)) break; if (special[i] || rank[i] < n / 4) continue;
+    pieces[i].hidden = true; special[i] = true; H++; }
   return pieces;
 }
 
@@ -462,21 +516,50 @@ const LEVELS = [];
 for (let n = 1; n <= 30; n++) {
   const tier = tierFor(n), info = TIERS[tier], [f, l] = TIER_RANGE[tier], t = l > f ? (n - f) / (l - f) : .5;
   const mech = { locked: n >= 7 ? (n === 7 ? 1 : n < 20 ? 2 : 3) : 0, chain: n >= 11 ? (n < 20 ? 2 : 3) : 0, rotating: n >= 18 ? (n === 18 ? 1 : n < 25 ? 2 : 3) : 0 };
-  if (n === 11) mech.locked = 0; if (n === 18) { mech.chain = 0; mech.locked = 1; }
+  mech.hidden = n >= 14 ? (n < 25 ? 2 : 4) : 0;
+  if (n === 11) mech.locked = 0; if (n === 14) { mech.locked = 1; mech.chain = 0; } if (n === 18) { mech.chain = 0; mech.locked = 1; mech.hidden = 0; }
   LEVELS.push({ n, tier, objectId: OBJECTS[(n - 1) % 10].id, target: Math.round(info.min + (info.max - info.min) * (0.25 + 0.6 * t)), seed: n * 7919 + 0x5E3D, mech,
     intro: n === 7 ? "Locked pieces sit in a grey cage. They can't move until their key piece (it glows when you tap the cage) has escaped." :
            n === 11 ? "Gold arrows are chained: when the first escapes, its partner slides out too if its path is clear." :
+           n === 14 ? "Pieces showing grey diamonds hide their arrow. Rotate the object to look at a side face and the arrow appears." :
            n === 18 ? "Purple arrows rotate. Tap one while it's blocked and it turns to point a new way." : null });
 }
+
+/* ---------- Daily challenge rules (port of DailyChallengeRules.cs) ---------- */
+function fnv(str) { let h = 2166136261 >>> 0; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } return h; }
+const pad2 = v => String(v).padStart(2, "0");
+const dateKey = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+const TIER_NAMES = ["Beginner", "Easy", "Medium", "Hard", "Expert"];
+const WEEKDAY_TIER = [3, 1, 1, 2, 2, 2, 2]; // Sun..Sat: gentle Monday, hardest Sunday
+function mechUnlocked(highest, tier) {
+  const sc = tier === "Hard" || tier === "Expert" ? 2 : 1;
+  return { locked: highest >= 7 ? sc : 0, chain: highest >= 11 ? sc : 0, hidden: highest >= 14 ? 1 + sc : 0, rotating: highest >= 18 ? sc : 0 };
+}
+function buildDaily(date, streak, highest) {
+  const key = dateKey(date), seed = fnv("shape-escape-daily-" + key);
+  const dayIndex = Math.round((new Date(date.getFullYear(), date.getMonth(), date.getDate()) - new Date(2024, 0, 1)) / 86400000);
+  let tv = WEEKDAY_TIER[date.getDay()] + Math.min(2, Math.floor(streak / 5));
+  if (highest < 5) tv = Math.min(tv, 1);
+  const tier = TIER_NAMES[Math.min(4, tv)], info = TIERS[tier];
+  const objectId = dayIndex % 3 === 0 ? DAILY_IDS[Math.floor(dayIndex / 3) % DAILY_IDS.length] : CAMPAIGN_IDS[seed % CAMPAIGN_IDS.length];
+  return { n: 0, daily: true, dateKey: key, tier, objectId, target: Math.round((info.min + info.max) / 2), seed: seed % 1000003 + 17, mech: mechUnlocked(highest, tier), intro: null };
+}
+const dailyReward = streak => 50 + Math.min(10, Math.max(0, streak - 1)) * 10;
 
 /* =====================================================================
    SAVE (per-browser, optional)
    ===================================================================== */
 const SAVE_KEY = "shape-escape-3d-web";
-let save = { coins: 100, hints: 3, done: {}, objects: {}, seen: {} };
+let save = { coins: 100, hints: 3, done: {}, objects: {}, seen: {}, daily: { last: "", streak: 0, best: 0, history: [] } };
 try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); if (s && typeof s === "object") save = Object.assign(save, s); } catch (e) {}
 function persist() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) {} }
 const nextLevel = () => { for (let n = 1; n <= 30; n++) if (!save.done[n]) return n; return 30; };
+const todayKey = () => dateKey(new Date());
+const yesterdayKey = () => { const d = new Date(); d.setDate(d.getDate() - 1); return dateKey(d); };
+const dailyDoneToday = () => save.daily.last === todayKey();
+const currentStreak = () => (save.daily.last === todayKey() || save.daily.last === yesterdayKey()) ? save.daily.streak : 0;
+const todaysDaily = () => buildDaily(new Date(), dailyDoneToday() ? Math.max(0, save.daily.streak - 1) : currentStreak(), nextLevel());
+const specKey = sp => sp.daily ? "d" + sp.dateKey : "l" + sp.n;
 
 /* =====================================================================
    AUDIO — synthesized, starts after the first tap
@@ -537,6 +620,15 @@ const ARROW_TEX = (() => { const c = document.createElement("canvas"); c.width =
   g.beginPath(); g.moveTo(64, 20); g.lineTo(110, 64); g.lineTo(64, 108); g.closePath(); g.lineJoin = "round"; g.lineWidth = 8; g.strokeStyle = "#fff"; g.stroke(); g.fill();
   g.beginPath(); g.arc(192, 64, 24, 0, Math.PI * 2); g.fill();
   const t = new THREE.CanvasTexture(c); t.anisotropy = 4; return t; })();
+// Hidden-arrow marker: a small diamond on every face.
+const HIDDEN_TEX = (() => { const c = document.createElement("canvas"); c.width = c.height = 128; const g = c.getContext("2d"); g.fillStyle = "#fff";
+  g.beginPath(); g.moveTo(64, 34); g.lineTo(94, 64); g.lineTo(64, 94); g.lineTo(34, 64); g.closePath(); g.fill(); return new THREE.CanvasTexture(c); })();
+const HIDDEN_GEO = (() => { const pos = [], uv = [], idx = [];
+  for (let f = 0; f < 6; f++) { const n = new THREE.Vector3(...DIRS[f]), u = Math.abs(n.y) > .5 ? new THREE.Vector3(1,0,0) : new THREE.Vector3(0,1,0), v = new THREE.Vector3().crossVectors(n, u), c = n.clone().multiplyScalar(.457), base = pos.length / 3;
+    for (const [a, b] of [[-1,-1],[1,-1],[1,1],[-1,1]]) { const p = c.clone().addScaledVector(u, a * .4).addScaledVector(v, b * .4); pos.push(p.x, p.y, p.z); uv.push(a < 0 ? 0 : 1, b < 0 ? 0 : 1); }
+    idx.push(base, base+1, base+2, base, base+2, base+3); }
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); return g; })();
+const HIDDEN_MAT = new THREE.MeshBasicMaterial({ color: "#6c6f8a", map: HIDDEN_TEX, transparent: true, side: THREE.DoubleSide, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
 const arrowGeoCache = {};
 function arrowGeo(d) {
   if (arrowGeoCache[d]) return arrowGeoCache[d];
@@ -637,11 +729,11 @@ function clearBoard() {
   if (revealModel) revealModel = null;
 }
 
-function loadLevel(n, interactive) {
+function loadSpec(spec, interactive) {
   clearBoard();
   document.getElementById("loading").hidden = false;
   setTimeout(() => {
-    const spec = LEVELS[n - 1], gen = generate(spec), state = new PuzzleState(gen.pieces.map(p => ({ ...p })));
+    const n = spec.n, gen = generate(spec), state = new PuzzleState(gen.pieces.map(p => ({ ...p })));
     const mx = [0,1,2].map(i => Math.max(...gen.pieces.map(p => [p.x,p.y,p.z][i])));
     const center = new THREE.Vector3(mx[0] / 2, mx[1] / 2, mx[2] / 2);
     const radius = .5 * Math.hypot(mx[0] + 1, mx[1] + 1, mx[2] + 1);
@@ -651,16 +743,16 @@ function loadLevel(n, interactive) {
       const realHex = gen.tpl.palette[p.pal], body = new THREE.Mesh(PIECE_GEO, bodyMat(hexMix(realHex, "#dbd9e6", .42)));
       body.castShadow = body.receiveShadow = true; body.userData.id = p.id; g.add(body);
       const kind = p.lock >= 0 ? "locked" : p.cycle ? "rotating" : p.chain.length ? "chain" : "normal";
-      const arrow = new THREE.Mesh(arrowGeo(state.dirOf(p)), arrowMat(ARROW[kind])); g.add(arrow);
+      const arrow = new THREE.Mesh(p.hidden ? HIDDEN_GEO : arrowGeo(state.dirOf(p)), p.hidden ? HIDDEN_MAT : arrowMat(ARROW[kind])); g.add(arrow);
       let cage = null; if (p.lock >= 0) { cage = cageGeo.clone(); g.add(cage); }
-      g.userData = { id: p.id, home: g.position.clone(), body, arrow, cage, realHex, kind };
+      g.userData = { id: p.id, home: g.position.clone(), body, arrow, cage, realHex, kind, concealed: p.hidden };
       root.add(g); meshes.set(p.id, g);
     }
     for (const p of state.pieces) for (const t of p.chain) {
       const link = new THREE.Mesh(new THREE.CylinderGeometry(.06, .06, 1, 8), new THREE.MeshStandardMaterial({ color: "#C9A227", metalness: .5, roughness: .3 }));
       root.add(link); chains.push({ a: p.id, b: t, link }); meshes.get(t).userData.arrow.material = arrowMat(ARROW.chain);
     }
-    game = { n, spec, gen, state, meshes, chains, center, radius, taps: 0, blocked: 0, hints: 0, start: performance.now(), interactive, done: false };
+    game = { n, spec, daily: !!spec.daily, gen, state, meshes, chains, center, radius, taps: 0, blocked: 0, hints: 0, start: performance.now(), interactive, done: false };
     shadowBlob.position.set(0, -radius * .95, 0); shadowBlob.scale.set(radius * 2.6, radius * 1.6, 1); shadowBlob.visible = true;
     if (mode === "home") frame(radius, 1.45, .32); else frame(radius, 1, .04);
     view.dist = view.target; resetView(); root.quaternion.copy(view.q); view.spin = interactive ? 0 : 12;
@@ -677,7 +769,8 @@ function startPlaying() {
   if (!game) return;
   game.interactive = true; game.start = performance.now(); view.spin = 0; frame(game.radius, 1, .04); resetView();
   show("hud"); refreshHud();
-  if (game.n === 1 && !save.seen.basic) setTip("Tap a piece to slide it out along its arrow", 0);
+  if (game.daily) setTip(game.gen.tpl.daily ? "Daily special: solve it to collect the " + game.gen.tpl.name + "!" : "Today's puzzle. Keep your streak going!", 3500);
+  else if (game.n === 1 && !save.seen.basic) setTip("Tap a piece to slide it out along its arrow", 0);
   else if (game.spec.intro && !save.seen["intro" + game.n]) { setTip(game.spec.intro, 7000); save.seen["intro" + game.n] = 1; persist(); }
   else setTip("");
 }
@@ -685,7 +778,7 @@ function startPlaying() {
 function refreshHud() {
   if (!game) return;
   const total = game.state.pieces.length, left = game.state.remaining;
-  document.getElementById("hudLevel").textContent = "Level " + game.n;
+  document.getElementById("hudLevel").textContent = game.daily ? "Daily Challenge" : "Level " + game.n;
   document.getElementById("hudTier").textContent = "??? · " + game.spec.tier;
   document.getElementById("hudLeft").textContent = left + " left";
   document.getElementById("hudBar").style.width = (100 * (1 - left / total)) + "%";
@@ -694,6 +787,7 @@ function refreshHud() {
   if (m.locked) legend.push('<span><i style="background:#8D99AE"></i>Caged = locked</span>');
   if (m.chain) legend.push('<span><i style="background:#C9A227"></i>Gold = chained</span>');
   if (m.rotating) legend.push('<span><i style="background:#7B2CBF"></i>Purple = rotates</span>');
+  if (m.hidden) legend.push('<span><i style="background:#6c6f8a;transform:rotate(45deg)"></i>Diamonds = hidden, rotate to look</span>');
   document.getElementById("legend").innerHTML = legend.join("");
 }
 
@@ -708,17 +802,50 @@ function onTap(id) {
     res.removed.forEach((r, i) => setTimeout(() => removePiece(r.id, r.dir, combo++), i * 90));
     res.unlocked.forEach(uid => { const c = pieceWorld(uid).userData; if (c.cage) { const cage = c.cage; tween(.35, k => cage.scale.setScalar((1 + .6 * k) * (1 - k * k)), () => { cage.visible = false; c.arrow.material = arrowMat(ARROW.normal); }); } });
     if (res.unlocked.length) sfx.unlock();
-    if (game.n === 1 && !save.seen.basic) { save.seen.basic = 1; persist(); setTip("Drag to rotate · Pinch or scroll to zoom", 3500); }
+    if (!game.daily && game.n === 1 && !save.seen.basic) { save.seen.basic = 1; persist(); setTip("Drag to rotate · Pinch or scroll to zoom", 3500); }
     refreshHud();
     if (game.state.remaining === 0) complete();
   } else if (res.outcome === "blocked") {
     game.blocked++; combo = 0; bump(g, res.dir, res.free); sfx.blocked(); buzz(20);
     setTimeout(() => { const b = pieceWorld(res.blocker); if (b) flash(b); }, 60 + 45 * res.free);
-    if (game.n === 1 && game.blocked === 1) setTip("Blocked! Free the way first, then try again.", 2600);
+    if (!game.daily && game.n === 1 && game.blocked === 1) setTip("Blocked! Free the way first, then try again.", 2600);
   } else if (res.outcome === "locked") {
     game.blocked++; shake(g); sfx.locked(); buzz(20); const key = pieceWorld(res.key); if (key) pulse(key, 900);
   } else if (res.outcome === "rotated") {
     g.userData.arrow.geometry = arrowGeo(res.dir); tween(.3, k => g.userData.arrow.scale.setScalar(.4 + .6 * easeOutBack(k))); sfx.rotate();
+  }
+}
+
+function revealHidden(g) {
+  if (!g.userData.concealed) return;
+  g.userData.concealed = false;
+  const p = game.state.byId.get(g.userData.id), a = g.userData.arrow;
+  a.geometry = arrowGeo(game.state.dirOf(p)); a.material = arrowMat(ARROW[g.userData.kind]);
+  tween(.3, k => a.scale.setScalar(.4 + .6 * easeOutBack(k)));
+  tone(1568, .12, "sine", .08); tone(2093, .14, "sine", .07, null, .05);
+}
+// A hidden arrow appears once one of its arrow faces turns toward the camera with nothing in the way.
+let hiddenTimer = 0;
+const _n = new THREE.Vector3(), _wp = new THREE.Vector3(), _to = new THREE.Vector3(), _ray = new THREE.Raycaster();
+function checkHidden(dt) {
+  if (!game || !game.interactive || game.done || mode !== "play") return;
+  hiddenTimer -= dt; if (hiddenTimer > 0) return; hiddenTimer = .12;
+  let bodies = null;
+  for (const g of game.meshes.values()) {
+    if (!g.userData.concealed || g.userData.removed) continue;
+    const d = game.state.dirOf(game.state.byId.get(g.userData.id));
+    for (let f = 0; f < 6; f++) {
+      if (axisOf(f) === axisOf(d)) continue;
+      _n.set(...DIRS[f]).applyQuaternion(root.quaternion);
+      g.getWorldPosition(_wp).addScaledVector(_n, .5);
+      _to.copy(camera.position).sub(_wp).normalize();
+      if (_n.dot(_to) < .7) continue;
+      bodies = bodies || [...game.meshes.values()].filter(m => !m.userData.removed).map(m => m.userData.body);
+      _ray.set(_wp.clone().addScaledVector(_n, .02), _to);
+      const hit = _ray.intersectObjects(bodies, false)[0];
+      if (hit && hit.object !== g.userData.body) continue;
+      revealHidden(g); break;
+    }
   }
 }
 
@@ -745,12 +872,12 @@ function useHint() {
   if (!game || !game.interactive || game.done) return;
   if (save.hints <= 0) { if (save.coins >= 60) { save.coins -= 60; save.hints++; toast("Bought a hint for 60 coins"); } else { toast("No hints left. Earn coins by solving levels."); return; } }
   const st = game.state; let best = null, bs = -1;
-  for (const p of st.pieces) { if (st.removed.has(p.id) || !st.check(p).clear) continue; const s = st.blocksCount(p.id); if (s > bs) { bs = s; best = p; } }
+  for (const p of st.pieces) { if (st.removed.has(p.id) || !st.check(p).clear) continue; const s = st.blocksCount(p.id) * 10 - (pieceWorld(p.id).userData.concealed ? 3 : 0); if (s > bs) { bs = s; best = p; } }
   let rotateHint = false;
   if (!best) { best = st.pieces.find(p => !st.removed.has(p.id) && p.cycle && st.canLeaveSomehow(p)); rotateHint = true; }
   if (!best) return;
   save.hints--; game.hints++; persist(); refreshHud(); sfx.hint();
-  const g = pieceWorld(best.id); hinted = g; pulse(g, 1e9);
+  const g = pieceWorld(best.id); hinted = g; pulse(g, 1e9); revealHidden(g);
   // Turn the object so an arrow face of that piece looks at the player.
   const d = st.dirOf(best), out = g.userData.home.clone().normalize(); let face = null, fs = -9;
   for (let f = 0; f < 6; f++) if (axisOf(f) !== axisOf(d)) { const n = new THREE.Vector3(...DIRS[f]), s = n.dot(out); if (s > fs) { fs = s; face = n; } }
@@ -780,11 +907,27 @@ function burst(radius) {
 
 function complete() {
   game.done = true; game.interactive = false; const g = game; const secs = (performance.now() - g.start) / 1000;
-  const firstClear = !save.done[g.n], stars = Math.max(1, 3 - (g.blocked > Math.max(2, g.state.pieces.length / 6) ? 1 : 0) - (g.hints ? 1 : 0));
-  const coins = firstClear ? TIERS[g.spec.tier].coins + (stars - 1) * 5 : Math.max(3, TIERS[g.spec.tier].coins / 4 | 0);
+  const stars = Math.max(1, 3 - (g.blocked > Math.max(2, g.state.pieces.length / 6) ? 1 : 0) - (g.hints ? 1 : 0));
   const isNew = !save.objects[g.spec.objectId];
-  save.done[g.n] = Math.max(save.done[g.n] || 0, stars); save.objects[g.spec.objectId] = 1; save.coins += coins;
-  let bonus = 0; const solved = Object.keys(save.done).length; if (firstClear && solved % 3 === 0) { save.hints++; bonus = 1; }
+  let coins, bonus = 0, firstClear = false, extra = "";
+  if (g.daily) {
+    const today = todayKey(), d = save.daily;
+    if (g.spec.dateKey === today && d.last !== today) {
+      const streak = currentStreak() + 1;
+      d.streak = streak; d.best = Math.max(d.best, streak); d.last = today;
+      coins = dailyReward(streak);
+      if (streak % 7 === 0) { save.hints += 2; bonus = 2; }
+      d.history.unshift({ date: today, obj: g.spec.objectId, secs: Math.round(secs), coins, streak });
+      d.history = d.history.slice(0, 60);
+      extra = `🔥 ${streak}-day streak`;
+    } else { coins = 5; extra = "Already solved today: practice reward"; }
+  } else {
+    firstClear = !save.done[g.n];
+    coins = firstClear ? TIERS[g.spec.tier].coins + (stars - 1) * 5 : Math.max(3, TIERS[g.spec.tier].coins / 4 | 0);
+    save.done[g.n] = Math.max(save.done[g.n] || 0, stars);
+    const solved = Object.keys(save.done).length; if (firstClear && solved % 3 === 0) { save.hints++; bonus = 1; }
+  }
+  save.objects[g.spec.objectId] = 1; save.coins += coins;
   persist();
   setTimeout(() => {
     resetView(); setTip("");
@@ -808,8 +951,8 @@ function complete() {
         const nc = document.getElementById("cNew"); nc.hidden = !isNew; nc.textContent = "New in " + tpl.room + "!";
         document.getElementById("cStars").innerHTML = [0,1,2].map(i => `<span class="${i < stars ? "on" : "off"}">★</span>`).join("");
         document.getElementById("cCoins").textContent = "🪙 +" + coins;
-        document.getElementById("cExtra").textContent = `${Math.round(secs)}s · ${g.taps} taps` + (bonus ? " · +1 free hint" : "") + (g.n === 30 && firstClear ? " · You solved every object!" : "");
-        document.getElementById("nextBtn").textContent = g.n < 30 ? "Next: Level " + (g.n + 1) : "Back to Home";
+        document.getElementById("cExtra").textContent = [extra, `${Math.round(secs)}s · ${g.taps} taps`, bonus ? `+${bonus} free hint${bonus > 1 ? "s" : ""}` : "", !g.daily && g.n === 30 && firstClear ? "You solved every object!" : ""].filter(Boolean).join(" · ");
+        document.getElementById("nextBtn").textContent = !g.daily && g.n < 30 ? "Next: Level " + (g.n + 1) : "Back to Home";
         mode = "complete"; show("complete");
       }, 900);
     }, 1350);
@@ -825,7 +968,10 @@ function updateHome() {
   const n = nextLevel(); document.getElementById("homeLevel").textContent = `Level ${n} · ${LEVELS[n - 1].tier}`;
   document.getElementById("coinsHome").textContent = "🪙 " + save.coins;
   document.getElementById("levelsStat").textContent = Object.keys(save.done).length + " / 30 solved";
-  document.getElementById("collStat").textContent = Object.keys(save.objects).length + " / 10 objects";
+  document.getElementById("collStat").textContent = Object.keys(save.objects).length + " / " + OBJECTS.length + " objects";
+  const done = dailyDoneToday();
+  document.getElementById("dailyStat").textContent = done ? "Done ✓ · 🔥" + save.daily.streak : (currentStreak() ? "🔥" + currentStreak() + " · " : "") + "+" + dailyReward(currentStreak() + 1);
+  document.getElementById("dailyDot").hidden = done;
 }
 let tipTimer = 0;
 function setTip(text, ms) { const t = document.getElementById("tip"); clearTimeout(tipTimer); t.textContent = text; t.style.opacity = text ? 1 : 0; if (text && ms) tipTimer = setTimeout(() => t.style.opacity = 0, ms); }
@@ -834,17 +980,41 @@ function toast(text) { const t = document.getElementById("toast"); t.textContent
 
 function goHome() {
   mode = "home"; if (viewerModel) { root.remove(viewerModel); viewerModel = null; } show("home");
-  loadLevel(nextLevel(), false);
+  loadSpec(LEVELS[nextLevel() - 1], false);
 }
-function play(n) { mode = "play"; show("hud"); if (game && game.n === n && !game.interactive && !game.done) startPlaying(); else loadLevel(n, true); }
+function playSpec(spec) { mode = "play"; show("hud"); if (game && specKey(game.spec) === specKey(spec) && !game.interactive && !game.done) startPlaying(); else loadSpec(spec, true); }
+const play = n => playSpec(LEVELS[n - 1]);
 
 document.getElementById("playBtn").onclick = () => { audio(); play(nextLevel()); };
 document.getElementById("homeBtn").onclick = goHome;
 document.getElementById("cHomeBtn").onclick = goHome;
 document.getElementById("resetBtn").onclick = resetView;
-document.getElementById("restartBtn").onclick = () => { if (game) loadLevel(game.n, true); };
+document.getElementById("restartBtn").onclick = () => { if (game) loadSpec(game.spec, true); };
 document.getElementById("hintBtn").onclick = useHint;
-document.getElementById("nextBtn").onclick = () => { if (!game) return; if (game.n < 30) play(game.n + 1); else goHome(); };
+document.getElementById("nextBtn").onclick = () => { if (!game) return; if (!game.daily && game.n < 30) play(game.n + 1); else goHome(); };
+let dailyTicker = 0;
+function renderDaily() {
+  const spec = todaysDaily(), tpl = OBJECTS.find(o => o.id === spec.objectId), done = dailyDoneToday();
+  document.getElementById("dDate").textContent = new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
+  document.getElementById("dTier").textContent = spec.tier + " · ??? mystery object";
+  document.getElementById("dReward").textContent = "🪙 +" + dailyReward(currentStreak() + 1) + ((currentStreak() + 1) % 7 === 0 && !done ? "  + 2 hints" : "");
+  document.getElementById("dSpecial").textContent = tpl.daily ? (save.objects[tpl.id] ? "Daily-only collectible (already collected)" : "★ Daily-only collectible today!") : "";
+  document.getElementById("dPlay").hidden = done;
+  const left = new Date(); left.setHours(24, 0, 0, 0); const ms = left - new Date();
+  const dn = document.getElementById("dDone"); dn.hidden = !done;
+  dn.textContent = `Solved today! Next puzzle in ${Math.floor(ms / 3600000)}h ${pad2(Math.floor(ms / 60000) % 60)}m ${pad2(Math.floor(ms / 1000) % 60)}s`;
+  document.getElementById("dStreak").textContent = "🔥 " + currentStreak() + "-day streak";
+  document.getElementById("dBest").textContent = "Best: " + save.daily.best;
+  const h = save.daily.history;
+  document.getElementById("dHistory").innerHTML = h.length ? h.map(e => { const o = OBJECTS.find(x => x.id === e.obj);
+    return `<div class="hist"><span>${e.date} · ${o ? o.name : e.obj}</span><span>${Math.floor(e.secs / 60)}:${pad2(e.secs % 60)} · 🔥${e.streak} · +${e.coins}</span></div>`; }).join("")
+    : '<p class="hint-txt">Solve today\'s puzzle to start your history.</p>';
+}
+document.getElementById("dailyBtn").onclick = () => {
+  renderDaily(); document.getElementById("dailyPanel").hidden = false;
+  clearInterval(dailyTicker); dailyTicker = setInterval(() => { if (document.getElementById("dailyPanel").hidden) clearInterval(dailyTicker); else renderDaily(); }, 1000);
+};
+document.getElementById("dPlay").onclick = () => { document.getElementById("dailyPanel").hidden = true; audio(); playSpec(todaysDaily()); };
 document.querySelectorAll("[data-close]").forEach(b => b.onclick = () => b.closest(".overlay").hidden = true);
 document.getElementById("levelsBtn").onclick = () => {
   const nx = nextLevel(), grid = document.getElementById("levelGrid");
@@ -856,7 +1026,7 @@ document.getElementById("levelsBtn").onclick = () => {
 document.getElementById("collBtn").onclick = () => {
   const grid = document.getElementById("collGrid");
   grid.innerHTML = OBJECTS.map((o, i) => { const have = save.objects[o.id];
-    return `<button class="obj" data-id="${o.id}" ${have ? "" : "disabled"}><div class="sw" style="background:${have ? o.palette[0] : "#d9d6e6"}">${have ? "" : "?"}</div><b>${have ? o.name : "???"}</b><span>${have ? o.room : "Solve level " + (i + 1)}</span></button>`; }).join("");
+    return `<button class="obj" data-id="${o.id}" ${have ? "" : "disabled"}><div class="sw" style="background:${have ? o.palette[0] : "#d9d6e6"}">${have ? "" : "?"}</div><b>${have ? o.name : "???"}</b><span>${have ? o.room + (o.daily ? " · Daily" : "") : o.daily ? "Daily challenge only" : "Solve level " + (i + 1)}</span></button>`; }).join("");
   grid.querySelectorAll("button:not(:disabled)").forEach(b => b.onclick = () => { document.getElementById("collPanel").hidden = true; openViewer(b.dataset.id); });
   document.getElementById("collPanel").hidden = false;
 };
@@ -915,6 +1085,7 @@ function loop(now) {
   root.quaternion.slerp(view.q, 1 - Math.exp(-18 * dt));
   view.dist += (view.target - view.dist) * (1 - Math.exp(-12 * dt));
   camera.position.set(0, -view.offset * view.radius, view.dist); camera.lookAt(0, -view.offset * view.radius, 0);
+  checkHidden(dt);
   if (hinted) hinted.scale.setScalar(1 + .08 * (.5 + .5 * Math.sin(now / 140)));
   if (game) for (const ch of game.chains) { const a = pieceWorld(ch.a).position, b = pieceWorld(ch.b).position, len = a.distanceTo(b);
     ch.link.position.lerpVectors(a, b, .5); ch.link.scale.set(1, Math.max(.01, len), 1); ch.link.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize()); }
