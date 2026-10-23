@@ -20,6 +20,11 @@ mcs $COMMON -target:library -out:"$OUT/ShapeEscape.Runtime.dll" $ENGINE_REFS $UI
   "$ROOT/Tools/CompileCheck/Stubs.cs" $(find "$ROOT/Assets/ShapeEscape/Scripts/Runtime" -name "*.cs")
 echo "[3/3] Editor (against an older UnityEditor reference; newer-API warnings are expected to be guarded)"
 mcs $COMMON -define:UNITY_EDITOR -target:library -out:"$OUT/ShapeEscape.Editor.dll" $ENGINE_REFS $UI_REF \
-  -r:"$REFS/unity3d.unityeditor/lib/UnityEditor.dll" -r:"$OUT/ShapeEscape.Core.dll" -r:"$OUT/ShapeEscape.Runtime.dll" \
+  -r:"$REFS/unityengine.modules/lib/net45/UnityEngine.dll" -r:"$REFS/unity3d.unityeditor/lib/UnityEditor.dll" -r:"$OUT/ShapeEscape.Core.dll" -r:"$OUT/ShapeEscape.Runtime.dll" \
   $(find "$ROOT/Assets/ShapeEscape/Scripts/Editor" -name "*.cs")
+echo "[4/4] EditMode tests (NUnit)"
+NUNIT="$REFS/nunit/lib/netstandard2.0/nunit.framework.dll"
+[ -f "$NUNIT" ] || { (cd "$REFS" && curl -sSL -m 180 -o nunit.nupkg https://api.nuget.org/v3-flatcontainer/nunit/3.14.0/nunit.3.14.0.nupkg && unzip -o -q nunit.nupkg -d nunit); }
+mcs $COMMON -target:library -out:"$OUT/ShapeEscape.Tests.dll" -r:"$NUNIT" -r:"$OUT/ShapeEscape.Core.dll" \
+  $(find "$ROOT/Assets/ShapeEscape/Tests" -name "*.cs")
 echo "OK"

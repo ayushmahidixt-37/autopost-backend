@@ -33,15 +33,18 @@ namespace ShapeEscape
         public List<string> testDeviceIds = new List<string>();
 
         [Header("Interstitial pacing (only ever shown between levels)")]
-        [Tooltip("No interstitials until the player has completed this many levels.")]
-        public int firstInterstitialAfterLevels = 5;
-        public int levelsBetweenInterstitials = 3;
+        [Tooltip("Interstitials start after the player finishes this campaign level.")]
+        public int firstInterstitialLevel = ShapeEscape.Core.EconomyRules.InterstitialFromLevel;
+        [Tooltip("Show one interstitial every N completed levels.")]
+        public int levelsBetweenInterstitials = ShapeEscape.Core.EconomyRules.InterstitialEveryLevels;
         public float minSecondsBetweenInterstitials = 150f;
         [Tooltip("No interstitial within this many seconds after a rewarded ad.")]
-        public float secondsAfterRewarded = 90f;
+        public float secondsAfterRewarded = 120f;
 
         [Header("Rewarded limits")]
         public int rewardedDailyCap = 15;
+        public int hintAdsPerDay = ShapeEscape.Core.EconomyRules.AdHintsPerDay;
+        public int lifeAdsPerDay = ShapeEscape.Core.EconomyRules.AdLivesPerDay;
         public float minSecondsBetweenRewarded = 10f;
 
         static AdSettings _instance;

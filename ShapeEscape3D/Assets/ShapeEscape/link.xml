@@ -1,0 +1,9 @@
+<!-- Keeps types IL2CPP managed-code stripping would otherwise remove because they are only reached
+     through reflection (UI input module lookup, URP setup, JSON save data). -->
+<linker>
+  <assembly fullname="ShapeEscape.Core" preserve="all" />
+  <assembly fullname="ShapeEscape.Runtime" preserve="all" />
+  <assembly fullname="Unity.InputSystem">
+    <type fullname="UnityEngine.InputSystem.UI.InputSystemUIInputModule" preserve="all" />
+  </assembly>
+</linker>

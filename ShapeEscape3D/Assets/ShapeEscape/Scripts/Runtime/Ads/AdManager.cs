@@ -63,6 +63,8 @@ namespace ShapeEscape
             {
                 Data.rewardedDate = today;
                 Data.rewardedToday = 0;
+                Data.hintAdsToday = 0;
+                Data.lifeAdsToday = 0;
             }
         }
 
@@ -97,6 +99,7 @@ namespace ShapeEscape
                 {
                     RollDailyCounter();
                     Data.rewardedToday++;
+                    Data.rewardedTotal++;
                     _game.Save.MarkDirty();
                     _game.Analytics.Log(AnalyticsEvents.AdReward, "placement", placement, "network", _provider.Name);
                 }
@@ -105,11 +108,48 @@ namespace ShapeEscape
             });
         }
 
+        /// <summary>Rewarded ads left today for hints.</summary>
+        public int HintAdsLeftToday
+        {
+            get { RollDailyCounter(); return Mathf.Max(0, _settings.hintAdsPerDay - Data.hintAdsToday); }
+        }
+
+        /// <summary>Rewarded ads left today for extra lives.</summary>
+        public int LifeAdsLeftToday
+        {
+            get { RollDailyCounter(); return Mathf.Max(0, _settings.lifeAdsPerDay - Data.lifeAdsToday); }
+        }
+
+        /// <summary>Rewarded ad that grants a hint (counts against the daily hint-ad quota).</summary>
+        public void ShowRewardedForHint(Action<bool> onResult)
+        {
+            if (HintAdsLeftToday <= 0) { if (onResult != null) onResult(false); return; }
+            ShowRewarded("hint", ok =>
+            {
+                if (ok) { Data.hintAdsToday++; _game.Save.MarkDirty(); }
+                if (onResult != null) onResult(ok);
+            });
+        }
+
+        /// <summary>Rewarded ad that grants a life (counts against the daily life-ad quota).</summary>
+        public void ShowRewardedForLife(Action<bool> onResult)
+        {
+            if (LifeAdsLeftToday <= 0) { if (onResult != null) onResult(false); return; }
+            ShowRewarded("life", ok =>
+            {
+                if (ok) { Data.lifeAdsToday++; _game.Save.MarkDirty(); }
+                if (onResult != null) onResult(ok);
+            });
+        }
+
         // ---------------------------------------------------------------- interstitial
 
-        /// <summary>Call after each completed level; counts towards interstitial pacing.</summary>
-        public void NotifyLevelCompleted()
+        int _lastCompletedLevel;
+
+        /// <summary>Call after each completed campaign level; counts towards interstitial pacing.</summary>
+        public void NotifyLevelCompleted(int levelNumber)
         {
+            _lastCompletedLevel = levelNumber;
             Data.levelsSinceInterstitial++;
             _game.Save.MarkDirty();
         }
@@ -119,7 +159,7 @@ namespace ShapeEscape
             get
             {
                 if (_showing || Data.adsRemoved || _provider == null || !_provider.IsInterstitialReady) return false;
-                if (_game.Save.Data.totalLevelsCompleted < _settings.firstInterstitialAfterLevels) return false;
+                if (_lastCompletedLevel < _settings.firstInterstitialLevel) return false;
                 if (Data.levelsSinceInterstitial < _settings.levelsBetweenInterstitials) return false;
                 double since = (DateTime.UtcNow - new DateTime(Data.lastInterstitialUtcTicks, DateTimeKind.Utc)).TotalSeconds;
                 if (Data.lastInterstitialUtcTicks > 0 && since < _settings.minSecondsBetweenInterstitials) return false;
@@ -143,6 +183,7 @@ namespace ShapeEscape
                 _game.Audio.ApplySettings();
                 Data.levelsSinceInterstitial = 0;
                 Data.lastInterstitialUtcTicks = DateTime.UtcNow.Ticks;
+                Data.interstitialTotal++;
                 _game.Save.MarkDirty();
                 if (then != null) then();
             });

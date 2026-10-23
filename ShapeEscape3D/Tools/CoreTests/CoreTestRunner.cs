@@ -26,6 +26,7 @@ public static class CoreTestRunner
         TestBasicBlocking();
         TestDeadlockDetected();
         TestLockedChainRotatingGate();
+        TestLives();
 
         Console.WriteLine("== Templates ==");
         foreach (var t in ObjectCatalog.All)
@@ -38,6 +39,7 @@ public static class CoreTestRunner
         }
 
         Console.WriteLine("== Campaign levels ==");
+        var startFree = new float[LevelCatalog.CampaignLevelCount + 1];
         foreach (var spec in LevelCatalog.Campaign)
         {
             var t0 = sw.ElapsedMilliseconds;
@@ -69,10 +71,18 @@ public static class CoreTestRunner
                 }
             Check(state.IsSolved, "Level " + spec.number + " solution replay failed (" + state.RemainingCount + " left)");
 
-            Console.WriteLine(string.Format("  L{0,2} {1,-16} {2,-8} pieces={3,3} layers={4,2} initial={5,2} {6} gates={7} [{8}] {9}ms",
-                spec.number, spec.objectId, spec.tier, def.pieces.Count, v.Layers, v.InitialRemovable,
-                KindSummary(def), def.gates.Count, report.attempts, sw.ElapsedMilliseconds - t0));
+            startFree[spec.number] = v.InitialRemovable / (float)def.pieces.Count;
+            Console.WriteLine(string.Format("  L{0,2} {1,-16} {2,-8}{10} pieces={3,3} layers={4,2} startFree={5,3:P0} {6} gates={7} [{8}] {9}ms",
+                spec.number, spec.objectId, spec.tier, def.pieces.Count, v.Layers, startFree[spec.number],
+                KindSummary(def), def.gates.Count, report.attempts, sw.ElapsedMilliseconds - t0, spec.superHard ? "S" : spec.hard ? "H" : " "));
         }
+
+        Console.WriteLine("== Difficulty curve ==");
+        Check(startFree[30] <= 0.15f, "Level 30 should start with <=15% movable pieces, got " + startFree[30].ToString("P0"));
+        Check(startFree[1] >= 0.6f, "Level 1 should stay gentle, got " + startFree[1].ToString("P0"));
+        foreach (int hardLevel in new[] { 10, 15, 20, 25 })
+            Check(startFree[hardLevel] < startFree[hardLevel + 1],
+                "Hard level " + hardLevel + " should be tougher than the breather after it (" + startFree[hardLevel].ToString("P0") + " vs " + startFree[hardLevel + 1].ToString("P0") + ")");
 
         Console.WriteLine("== Daily challenges (365 days) ==");
         var start = new DateTime(2026, 1, 1);
@@ -92,6 +102,27 @@ public static class CoreTestRunner
         Console.WriteLine(_failures == 0 ? "ALL TESTS PASSED" : _failures + " FAILURE(S)");
         Console.WriteLine("Total time: " + sw.ElapsedMilliseconds + "ms");
         return _failures == 0 ? 0 : 1;
+    }
+
+    static void TestLives()
+    {
+        var t0 = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        var s = new LivesState(EconomyRules.MaxLives, 0);
+        s = s.Lose(t0);
+        Check(s.lives == 4 && s.regenStartTicks == t0.Ticks, "losing a life from full starts the regen clock");
+        s = s.Lose(t0.AddMinutes(10));
+        Check(s.lives == 3, "second loss");
+        Check(s.TimeToNext(t0.AddMinutes(10)) == TimeSpan.FromMinutes(20), "next life 30 min after the first loss");
+        var later = s.Sync(t0.AddMinutes(31));
+        Check(later.lives == 4 && later.regenStartTicks == t0.AddMinutes(30).Ticks, "one life back after 30 min, clock carries over");
+        var full = s.Sync(t0.AddHours(5));
+        Check(full.lives == EconomyRules.MaxLives && full.regenStartTicks == 0, "refills to max and stops the clock");
+        var none = new LivesState(0, t0.Ticks).Add(10, t0);
+        Check(none.lives == EconomyRules.MaxLives && none.IsFull, "adding lives caps at max");
+        var floor = new LivesState(0, t0.Ticks).Lose(t0);
+        Check(floor.lives == 0, "lives never go negative");
+        Check(EconomyRules.MistakesFor(LevelCatalog.Get(1)) == int.MaxValue && EconomyRules.MistakesFor(LevelCatalog.Get(4)) == 3, "practice levels 1-3, hearts from 4");
+        Check(EconomyRules.CoinMultiplier(LevelCatalog.Get(15)) == 2f && EconomyRules.CoinMultiplier(LevelCatalog.Get(10)) == 1.5f, "hard / super hard multipliers");
     }
 
     static string KindSummary(PuzzleDefinition def)

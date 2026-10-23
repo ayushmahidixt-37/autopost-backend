@@ -63,13 +63,8 @@ namespace ShapeEscape
             Data.bestStreak = Math.Max(Data.bestStreak, streak);
             Data.lastCompletedDate = TodayKey;
             summary.dailyStreak = streak;
-            summary.coins = DailyChallengeRules.RewardFor(streak);
+            summary.coins = DailyChallengeRules.RewardFor(streak) + (streak % 7 == 0 ? EconomyRules.StreakBonusCoins : 0);
             _game.Progression.AddCoins(summary.coins, "daily_challenge");
-            if (streak % 7 == 0)
-            {
-                summary.bonusHints = 2;
-                _game.Hints.AddHints(2, "daily_streak");
-            }
             summary.newObject = _game.Collection.Unlock(session.Spec.objectId, 0);
 
             Data.history.Insert(0, new SaveData.DailyRecord

@@ -160,15 +160,15 @@ namespace ShapeEscape.Core
             switch (tier)
             {
                 case DifficultyTier.Beginner:
-                    return new TierInfo { minPieces = 8, maxPieces = 15, minLayers = 2, maxLayers = 4, inwardBias = 0.25f, maxInitialFraction = 0.8f, coinReward = 10 };
+                    return new TierInfo { minPieces = 8, maxPieces = 15, minLayers = 2, maxLayers = 5, inwardBias = 0.25f, maxInitialFraction = 0.8f, coinReward = 10 };
                 case DifficultyTier.Easy:
-                    return new TierInfo { minPieces = 15, maxPieces = 25, minLayers = 3, maxLayers = 6, inwardBias = 0.4f, maxInitialFraction = 0.6f, coinReward = 15 };
+                    return new TierInfo { minPieces = 15, maxPieces = 25, minLayers = 3, maxLayers = 9, inwardBias = 0.4f, maxInitialFraction = 0.6f, coinReward = 15 };
                 case DifficultyTier.Medium:
-                    return new TierInfo { minPieces = 25, maxPieces = 45, minLayers = 4, maxLayers = 9, inwardBias = 0.55f, maxInitialFraction = 0.45f, coinReward = 20 };
+                    return new TierInfo { minPieces = 25, maxPieces = 45, minLayers = 5, maxLayers = 14, inwardBias = 0.6f, maxInitialFraction = 0.45f, coinReward = 20 };
                 case DifficultyTier.Hard:
-                    return new TierInfo { minPieces = 45, maxPieces = 70, minLayers = 5, maxLayers = 13, inwardBias = 0.7f, maxInitialFraction = 0.38f, coinReward = 30 };
+                    return new TierInfo { minPieces = 45, maxPieces = 70, minLayers = 7, maxLayers = 22, inwardBias = 0.75f, maxInitialFraction = 0.38f, coinReward = 30 };
                 default:
-                    return new TierInfo { minPieces = 70, maxPieces = 120, minLayers = 6, maxLayers = 18, inwardBias = 0.8f, maxInitialFraction = 0.32f, coinReward = 40 };
+                    return new TierInfo { minPieces = 70, maxPieces = 120, minLayers = 9, maxLayers = 32, inwardBias = 0.85f, maxInitialFraction = 0.32f, coinReward = 40 };
             }
         }
     }

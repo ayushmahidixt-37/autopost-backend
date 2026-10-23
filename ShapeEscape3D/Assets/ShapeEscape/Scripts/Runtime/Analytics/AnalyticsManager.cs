@@ -29,6 +29,11 @@ namespace ShapeEscape
         public const string CoinsSpent = "coins_spent";
         public const string TutorialShown = "tutorial_shown";
         public const string Error = "client_error";
+        public const string LifeLost = "life_lost";
+        public const string LifeGained = "life_gained";
+        public const string OutOfMoves = "out_of_moves";
+        public const string ContinueUsed = "continue_used";
+        public const string OutOfLives = "out_of_lives";
     }
 
     public interface IAnalyticsProvider

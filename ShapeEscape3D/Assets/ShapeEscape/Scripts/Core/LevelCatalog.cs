@@ -19,6 +19,12 @@ namespace ShapeEscape.Core
         public ArrowKind introduces = ArrowKind.Normal;
         public bool isDaily;
         public string dailyDate;
+        /// <summary>0..1 difficulty used by the generator (saw-tooth curve across the campaign).</summary>
+        public float difficulty = 0.5f;
+        /// <summary>Peak of a 5-level block: tougher layout, 1.5x coins.</summary>
+        public bool hard;
+        /// <summary>Milestone level (15, 25, 30): toughest layout, 2x coins.</summary>
+        public bool superHard;
 
         public string Key
         {
@@ -34,7 +40,8 @@ namespace ShapeEscape.Core
                 targetPieces = targetPieces,
                 seed = seed,
                 mechanics = mechanics != null ? mechanics.Clone() : new MechanicPlan(),
-                devicePieceCap = devicePieceCap
+                devicePieceCap = devicePieceCap,
+                difficulty = difficulty
             };
         }
     }
@@ -92,8 +99,19 @@ namespace ShapeEscape.Core
                 float t = last > first ? (n - first) / (float)(last - first) : 0.5f;
                 int target = (int)Math.Round(info.minPieces + (info.maxPieces - info.minPieces) * (0.25f + 0.6f * t));
 
+                // Candy-Crush-style saw-tooth: difficulty climbs through each block of 5 levels, peaks on a
+                // "Hard" level, then drops for a breather. 15, 25 and 30 are "Super Hard" milestones.
+                int pos5 = (n - 1) % 5;
+                bool hard = n >= 5 && pos5 == 4;
+                bool superHard = n == 15 || n == 25 || n == 30;
+                float saw = n > 4 ? SawTooth[pos5] : 0f;
+                float difficulty = Math.Max(0f, Math.Min(1f, (n - 1) / 29f * 0.9f + saw + (superHard ? 0.08f : 0f)));
+
                 var spec = new LevelSpec
                 {
+                    difficulty = difficulty,
+                    hard = hard,
+                    superHard = superHard,
                     number = n,
                     objectId = ObjectCatalog.CampaignOrder[(n - 1) % ObjectCatalog.CampaignOrder.Length],
                     variant = (n - 1) / ObjectCatalog.CampaignOrder.Length,
@@ -111,6 +129,8 @@ namespace ShapeEscape.Core
             }
             return list;
         }
+
+        static readonly float[] SawTooth = { -0.07f, -0.03f, 0.01f, 0.05f, 0.14f };
 
         static void TierLevelRange(DifficultyTier tier, out int first, out int last)
         {
@@ -130,7 +150,7 @@ namespace ShapeEscape.Core
             var m = new MechanicPlan();
             if (n >= IntroLocked) m.locked = n == IntroLocked ? 1 : n < IntroChain ? 2 : n < 20 ? 2 : 3;
             if (n >= IntroChain) m.chain = n == IntroChain ? 2 : n < 20 ? 2 : 3;
-            if (n >= IntroHidden) m.hidden = n == IntroHidden ? 2 : n < 25 ? 2 : 4;
+            if (n >= IntroHidden) m.hidden = n < 20 ? 3 : n < 25 ? 4 : 6;
             if (n >= IntroRotating) m.rotating = n == IntroRotating ? 1 : n < 25 ? 2 : 3;
             if (n >= IntroColor) m.colorGates = n == IntroColor ? 1 : n < 27 ? 1 : 2;
 
@@ -210,9 +230,22 @@ namespace ShapeEscape.Core
                 targetPieces = (info.minPieces + info.maxPieces) / 2,
                 seed = seed,
                 mechanics = LevelCatalog.MechanicsUnlockedBy(highestLevel, tier),
+                difficulty = DailyDifficulty(tier),
                 isDaily = true,
                 dailyDate = key
             };
+        }
+
+        static float DailyDifficulty(DifficultyTier tier)
+        {
+            switch (tier)
+            {
+                case DifficultyTier.Beginner: return 0.1f;
+                case DifficultyTier.Easy: return 0.3f;
+                case DifficultyTier.Medium: return 0.55f;
+                case DifficultyTier.Hard: return 0.75f;
+                default: return 0.92f;
+            }
         }
 
         /// <summary>Coins for completing the daily challenge with the given (new) streak.</summary>

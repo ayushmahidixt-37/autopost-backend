@@ -143,6 +143,9 @@ namespace ShapeEscape.Core
 
         public IEnumerable<PuzzlePiece> Pieces { get { return _pieces; } }
 
+        /// <summary>True if a (not yet removed) piece occupies the cell.</summary>
+        public bool IsOccupiedInitially(Int3 cell) { return _occupancy.ContainsKey(cell); }
+
         public PuzzlePiece GetPiece(int id)
         {
             int idx;

@@ -16,16 +16,17 @@ namespace ShapeEscape
         public bool isDaily;
         public int dailyStreak;
         public bool campaignFinished;
+        /// <summary>1, 1.5 (hard) or 2 (super hard).</summary>
+        public float coinMultiplier = 1f;
     }
 
     /// <summary>
-    /// Coins, level unlocking, stars, hint rewards and the 7-day login calendar.
+    /// Coins, level unlocking, stars and the 7-day login calendar. Hints are never handed out for free here:
+    /// players get EconomyRules.FreeHints once, then earn hints through optional rewarded ads.
     /// </summary>
     public sealed class ProgressionManager : MonoBehaviour
     {
         public static readonly int[] LoginRewards = { 20, 30, 40, 50, 60, 80, 150 };
-        /// <summary>Every N completed levels grants a free hint.</summary>
-        public const int HintEveryLevels = 3;
 
         public event Action<int> CoinsChanged;
 
@@ -101,15 +102,11 @@ namespace ShapeEscape
             }
 
             int baseCoins = TierInfo.Get(spec.tier).coinReward;
-            summary.coins = firstClear ? baseCoins + (session.Stars - 1) * 5 : Mathf.Max(3, baseCoins / 4);
+            summary.coinMultiplier = EconomyRules.CoinMultiplier(spec);
+            summary.coins = Mathf.RoundToInt((firstClear ? baseCoins + (session.Stars - 1) * 5 : Mathf.Max(3, baseCoins / 4)) * summary.coinMultiplier);
             AddCoins(summary.coins, firstClear ? "level_first_clear" : "level_replay");
 
             Data.totalLevelsCompleted++;
-            if (firstClear && Data.totalLevelsCompleted % HintEveryLevels == 0)
-            {
-                summary.bonusHints = 1;
-                _game.Hints.AddHints(1, "level_milestone");
-            }
 
             if (spec.number >= Data.highestUnlockedLevel && spec.number < LevelProvider.LevelCount)
                 Data.highestUnlockedLevel = spec.number + 1;
@@ -144,18 +141,13 @@ namespace ShapeEscape
         /// <summary>Grants today's login reward. Returns coins granted (0 if already claimed).</summary>
         public int ClaimLoginReward(out bool bonusHint)
         {
-            bonusHint = false;
+            bonusHint = false; // hints are ad-only after the free starter pack
             if (!LoginRewardAvailable) return 0;
             int day = PendingLoginDay;
             int coins = LoginRewards[day];
             Data.login.lastClaimDate = Today;
             Data.login.dayIndex = (day + 1) % LoginRewards.Length;
             AddCoins(coins, "daily_login");
-            if (day == LoginRewards.Length - 1)
-            {
-                bonusHint = true;
-                _game.Hints.AddHints(1, "daily_login");
-            }
             _game.Analytics.Log(AnalyticsEvents.DailyLoginReward, "day", day + 1, "coins", coins);
             _game.Save.MarkDirty();
             return coins;

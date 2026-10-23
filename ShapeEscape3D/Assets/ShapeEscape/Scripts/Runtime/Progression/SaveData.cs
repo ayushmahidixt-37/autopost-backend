@@ -11,7 +11,11 @@ namespace ShapeEscape
 
         public int version = CurrentVersion;
         public int coins = 100;
-        public int hints = 3;
+        /// <summary>Hints in stock. New players get EconomyRules.FreeHints once; more only via rewarded ads.</summary>
+        public int hints = ShapeEscape.Core.EconomyRules.FreeHints;
+        public int lives = ShapeEscape.Core.EconomyRules.MaxLives;
+        /// <summary>UTC ticks when the oldest missing life started refilling (0 = full).</summary>
+        public long livesRegenStartTicks;
         /// <summary>Highest campaign level the player may play (1-based).</summary>
         public int highestUnlockedLevel = 1;
         public List<LevelRecord> levels = new List<LevelRecord>();
@@ -94,6 +98,10 @@ namespace ShapeEscape
             public long lastInterstitialUtcTicks;
             public string rewardedDate = "";
             public int rewardedToday;
+            public int hintAdsToday;
+            public int lifeAdsToday;
+            public int rewardedTotal;
+            public int interstitialTotal;
         }
 
         public LevelRecord GetLevel(int number)
@@ -122,6 +130,8 @@ namespace ShapeEscape
             if (highestUnlockedLevel < 1) highestUnlockedLevel = 1;
             if (coins < 0) coins = 0;
             if (hints < 0) hints = 0;
+            if (lives < 0) lives = 0;
+            if (lives > ShapeEscape.Core.EconomyRules.MaxLives) lives = ShapeEscape.Core.EconomyRules.MaxLives;
             settings.musicVolume = Math.Max(0f, Math.Min(1f, settings.musicVolume));
             settings.sfxVolume = Math.Max(0f, Math.Min(1f, settings.sfxVolume));
             version = CurrentVersion;

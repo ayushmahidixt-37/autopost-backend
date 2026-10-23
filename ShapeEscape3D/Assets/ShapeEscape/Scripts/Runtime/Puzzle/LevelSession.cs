@@ -17,6 +17,13 @@ namespace ShapeEscape
         public int HintsUsed;
         public bool Started;
         public bool Completed;
+        /// <summary>Wrong moves still allowed (int.MaxValue = practice level without a limit).</summary>
+        public int MovesLeft = int.MaxValue;
+        public int MovesMax = int.MaxValue;
+        /// <summary>The once-per-attempt "watch ad for +2 moves" was used.</summary>
+        public bool Continued;
+        public bool OutOfMoves;
+        public bool HasMoveLimit { get { return MovesLeft != int.MaxValue; } }
 
         public bool IsDaily { get { return Spec != null && Spec.isDaily; } }
         public float Duration { get { return (Completed ? EndTime : Time.unscaledTime) - StartTime; } }

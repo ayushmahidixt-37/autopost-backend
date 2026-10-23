@@ -187,7 +187,9 @@ namespace ShapeEscape.EditorTools
             PlayerSettings.Android.targetSdkVersion = (AndroidSdkVersions)TargetApiLevel;
             PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARM64 | AndroidArchitecture.ARMv7;
             if (PlayerSettings.Android.bundleVersionCode < 1) PlayerSettings.Android.bundleVersionCode = 1;
-            EditorUserBuildSettings.buildAppBundle = true;
+#if UNITY_2018_3_OR_NEWER
+            EditorUserBuildSettings.buildAppBundle = true; // Google Play requires .aab
+#endif
             PlayerSettings.SetUseDefaultGraphicsAPIs(BuildTarget.Android, false);
             PlayerSettings.SetGraphicsAPIs(BuildTarget.Android, new[] { GraphicsDeviceType.Vulkan, GraphicsDeviceType.OpenGLES3 });
 

@@ -9,12 +9,11 @@ namespace ShapeEscape
     /// <summary>
     /// Hints point at a piece that can move right now (preferring the one unblocking the most others), turn the
     /// object so its arrow faces the player, and draw the exit path. They never make the move for the player.
-    /// Hints are a consumable: earned through play, bought with coins, or granted by an optional rewarded ad.
+    /// Hints are a consumable: EconomyRules.FreeHints once per install, then one per optional rewarded ad
+    /// (daily cap in AdSettings).
     /// </summary>
     public sealed class HintManager : MonoBehaviour
     {
-        public const int HintCoinCost = 60;
-
         public event Action<int> HintsChanged;
 
         GameManager _game;
@@ -62,13 +61,6 @@ namespace ShapeEscape
             _game.Save.MarkDirty();
             _game.Analytics.Log(AnalyticsEvents.HintEarned, "amount", amount, "source", source);
             if (HintsChanged != null) HintsChanged(_game.Save.Data.hints);
-        }
-
-        public bool BuyHintWithCoins()
-        {
-            if (!_game.Progression.SpendCoins(HintCoinCost, "hint")) return false;
-            AddHints(1, "coins");
-            return true;
         }
 
         bool ShowHint()

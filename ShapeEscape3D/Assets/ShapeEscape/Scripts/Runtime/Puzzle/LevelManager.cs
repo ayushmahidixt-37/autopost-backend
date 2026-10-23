@@ -19,6 +19,10 @@ namespace ShapeEscape
         public event Action<LevelSession> LevelCompleted;
         /// <summary>Raised when a special arrow type is seen for the first time in a level (tutorial cards).</summary>
         public event Action<ArrowKind> MechanicIntroduced;
+        /// <summary>A wrong move used one heart (UI shakes the hearts).</summary>
+        public event Action<LevelSession> MistakeMade;
+        /// <summary>All hearts are gone: GameManager offers continue / retry / give up.</summary>
+        public event Action<LevelSession> OutOfMoves;
 
         public LevelSession Current { get; private set; }
         public bool IsLoading { get; private set; }
@@ -114,6 +118,7 @@ namespace ShapeEscape
             Collision.Begin(def);
             Board.Build(def, template, 0.42f);
             Current = new LevelSession { Spec = spec, Definition = def, Template = template, Validation = validation };
+            Current.MovesLeft = Current.MovesMax = EconomyRules.MistakesFor(spec);
 
             var cam = _game.CameraRig;
             cam.SetTarget(Board.Root, Board.Radius, true, true);
@@ -167,7 +172,7 @@ namespace ShapeEscape
 
         public void SetInteractive(bool interactive)
         {
-            if (Current == null || Current.Completed) interactive = false;
+            if (Current == null || Current.Completed || Current.OutOfMoves) interactive = false;
             Interactive = interactive;
             _game.CameraRig.UserControlEnabled = interactive;
         }
@@ -248,6 +253,7 @@ namespace ShapeEscape
                     audio.Play(Sfx.Blocked);
                     _game.Haptics.Medium();
                     _game.Analytics.Log(AnalyticsEvents.MoveBlocked, "level", LevelKey(), "pieces_left", state.RemainingCount);
+                    RegisterMistake();
                     break;
 
                 case TapOutcome.Locked:
@@ -257,6 +263,7 @@ namespace ShapeEscape
                     if (key != null) StartCoroutine(BriefHighlight(key, 0.9f));
                     audio.Play(Sfx.Locked);
                     _game.Haptics.Medium();
+                    RegisterMistake();
                     break;
 
                 case TapOutcome.Rotated:
@@ -265,6 +272,36 @@ namespace ShapeEscape
                     _game.Haptics.Light();
                     break;
             }
+        }
+
+        void RegisterMistake()
+        {
+            var s = Current;
+            if (s == null || !s.HasMoveLimit) return;
+            s.MovesLeft = Mathf.Max(0, s.MovesLeft - 1);
+            if (MistakeMade != null) MistakeMade(s);
+            if (s.MovesLeft > 0) return;
+            s.OutOfMoves = true;
+            SetInteractive(false);
+            StartCoroutine(RaiseOutOfMoves(s));
+        }
+
+        IEnumerator RaiseOutOfMoves(LevelSession s)
+        {
+            yield return new WaitForSecondsRealtime(0.5f);
+            if (Current == s && !s.Completed && OutOfMoves != null) OutOfMoves(s);
+        }
+
+        /// <summary>"Watch an ad for +2 moves": once per attempt.</summary>
+        public void ContinueWithExtraMoves(int moves)
+        {
+            var s = Current;
+            if (s == null || s.Completed) return;
+            s.Continued = true;
+            s.OutOfMoves = false;
+            s.MovesLeft = s.MovesMax = moves;
+            SetInteractive(true);
+            if (ProgressChanged != null) ProgressChanged(s);
         }
 
         IEnumerator RemoveAfter(int id, Dir dir, float delay, int combo)

@@ -7,7 +7,7 @@ namespace ShapeEscape
     public enum Icon
     {
         Coin, Star, Gear, Pause, Play, Home, Lock, Bulb, Recenter, Restart, Close, Calendar, Grid,
-        Check, Video, Music, Speaker, Vibrate, Shield, Flame, Back, Globe, Gift, Gauge, Document
+        Check, Video, Music, Speaker, Vibrate, Shield, Flame, Back, Globe, Gift, Gauge, Document, Heart, Map, Friends
     }
 
     /// <summary>
@@ -108,6 +108,8 @@ namespace ShapeEscape
         static readonly Vector2[] PlayPts = { new Vector2(-0.45f, -0.62f), new Vector2(0.65f, 0f), new Vector2(-0.45f, 0.62f) };
         static readonly Vector2[] RoofPts = { new Vector2(-0.9f, 0.05f), new Vector2(0f, 0.85f), new Vector2(0.9f, 0.05f) };
         static readonly Vector2[] ShieldPts = { new Vector2(-0.7f, 0.62f), new Vector2(0f, 0.88f), new Vector2(0.7f, 0.62f), new Vector2(0.62f, -0.1f), new Vector2(0f, -0.88f), new Vector2(-0.62f, -0.1f) };
+        static readonly Vector2[] HeartPts = { new Vector2(-0.86f, 0.12f), new Vector2(0f, -0.86f), new Vector2(0.86f, 0.12f), new Vector2(0f, 0.3f) };
+        static readonly Vector2[] MapPts = { new Vector2(-0.85f, -0.65f), new Vector2(-0.85f, 0.72f), new Vector2(-0.3f, 0.9f), new Vector2(0.3f, 0.72f), new Vector2(0.85f, 0.9f), new Vector2(0.85f, -0.47f), new Vector2(0.3f, -0.65f), new Vector2(-0.3f, -0.47f) };
         static readonly Vector2[] FlamePts = { new Vector2(-0.5f, -0.25f), new Vector2(-0.05f, 0.92f), new Vector2(0.15f, 0.45f), new Vector2(0.5f, -0.25f) };
 
         static Func<float, float, float> SdfFor(Icon icon)
@@ -224,6 +226,22 @@ namespace ShapeEscape
                     {
                         float arc = Mathf.Max(Ring(x, y + 0.2f, 0.72f, 0.1f), -(y + 0.2f));
                         return Union(arc, Segment(x, y, 0, -0.2f, 0.35f, 0.3f, 0.09f));
+                    };
+                case Icon.Heart:
+                    return (x, y) => Union(Union(Circle(x, y, -0.4f, 0.28f, 0.44f), Circle(x, y, 0.4f, 0.28f, 0.44f)), Polygon(x, y, HeartPts));
+                case Icon.Map:
+                    return (x, y) =>
+                    {
+                        float d = Polygon(x, y, MapPts) - 0.03f;
+                        d = Sub(d, Segment(x, y, -0.3f, 0.72f, -0.3f, -0.47f, 0.05f));
+                        return Sub(d, Segment(x, y, 0.3f, 0.6f, 0.3f, -0.6f, 0.05f));
+                    };
+                case Icon.Friends:
+                    return (x, y) =>
+                    {
+                        float a = Union(Circle(x, y, -0.3f, 0.35f, 0.26f), Box(x, y, -0.3f, -0.4f, 0.42f, 0.32f, 0.3f));
+                        float b = Union(Circle(x, y, 0.38f, 0.42f, 0.22f), Box(x, y, 0.42f, -0.25f, 0.34f, 0.28f, 0.26f));
+                        return Union(a, b);
                     };
                 default: // Document
                     return (x, y) =>

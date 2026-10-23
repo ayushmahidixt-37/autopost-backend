@@ -14,6 +14,8 @@ namespace ShapeEscape.Core
         public int maxAttempts = 10;
         /// <summary>Optional cap used by low-end devices (never below the tier minimum).</summary>
         public int devicePieceCap;
+        /// <summary>0..1 difficulty within the campaign: fewer pieces are movable at once as it rises.</summary>
+        public float difficulty = 0.5f;
     }
 
     public sealed class GenerationReport
@@ -127,7 +129,9 @@ namespace ShapeEscape.Core
                 });
             }
 
-            Harden(def, tier.maxInitialFraction, rng);
+            float diff = Math.Max(0f, Math.Min(1f, req.difficulty));
+            Harden(def, tier.maxInitialFraction * (1f - 0.55f * diff), rng);
+            Deepen(def, (int)Math.Round(n * 1.4f * diff * diff), rng);
 
             // Rank = position in a valid solution (recomputed because hardening changed directions).
             var rank = new int[n];
@@ -179,6 +183,53 @@ namespace ShapeEscape.Core
                     }
                     piece.dir = old;
                 }
+            }
+        }
+
+        /// <summary>
+        /// Difficulty pass 2: points arrows through more pieces (longer dependency chains) while the puzzle stays
+        /// solvable, so at every step only a few pieces can move and players must search the object for them.
+        /// </summary>
+        static void Deepen(PuzzleDefinition def, int budget, DeterministicRandom rng)
+        {
+            if (budget <= 0) return;
+            var state = new PuzzleState(def);
+            var order = new List<PuzzlePiece>(def.pieces);
+            rng.Shuffle(order);
+            var options = new List<KeyValuePair<Dir, int>>();
+            foreach (var piece in order)
+            {
+                if (budget-- <= 0) break;
+                Dir old = piece.dir;
+                int current = BlockersOnPath(state, piece, old);
+                options.Clear();
+                foreach (var d in DirUtil.All)
+                {
+                    if (d == old) continue;
+                    int b = BlockersOnPath(state, piece, d);
+                    if (b > current) options.Add(new KeyValuePair<Dir, int>(d, b));
+                }
+                options.Sort((a, b) => b.Value.CompareTo(a.Value));
+                foreach (var o in options)
+                {
+                    piece.dir = o.Key;
+                    if (IsSolvableFast(state)) break;
+                    piece.dir = old;
+                }
+            }
+        }
+
+        static int BlockersOnPath(PuzzleState state, PuzzlePiece p, Dir d)
+        {
+            Int3 step = d.ToVector();
+            Int3 pos = p.cells[0];
+            Int3 min = state.BoundsMin, max = state.BoundsMax;
+            int count = 0;
+            while (true)
+            {
+                pos = pos + step;
+                if (pos.x < min.x || pos.y < min.y || pos.z < min.z || pos.x > max.x || pos.y > max.y || pos.z > max.z) return count;
+                if (state.IsOccupiedInitially(pos)) count++;
             }
         }
 
