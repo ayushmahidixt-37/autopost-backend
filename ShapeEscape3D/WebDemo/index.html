@@ -96,6 +96,47 @@ button:focus-visible { outline: 3px solid var(--violet); outline-offset: 3px; }
 .panel h4 { font-family: var(--display); font-size: 18px; margin: 6px 0; }
 .hist { display: flex; justify-content: space-between; gap: 10px; padding: 10px 4px; border-bottom: 1px solid #ece9f5; font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .hist span:last-child { color: var(--ink-soft); white-space: nowrap; }
+/* Lives, hearts, modal, ads, map, friends */
+.lives { display: inline-flex; align-items: center; gap: 6px; }
+.lives b { color: var(--coral); }
+.hearts { font-size: 16px; letter-spacing: 2px; color: var(--coral); margin-top: 2px; font-weight: 800; }
+.hearts.shake { animation: shake .4s; }
+@keyframes shake { 20%, 60% { transform: translateX(-5px); } 40%, 80% { transform: translateX(5px); } }
+.hardtag { color: var(--coral); }
+.supertag { color: var(--violet); }
+.modal { padding: 22px; gap: 10px; text-align: center; align-items: stretch; }
+.modal h3 { font-family: var(--display); font-size: 26px; margin: 0; }
+.modal p { margin: 0 0 6px; color: var(--ink-soft); font-weight: 700; }
+.modal .btn { width: 100%; }
+.btn:disabled { opacity: .45; cursor: default; }
+#modal, #adOverlay { z-index: 20; }
+#adOverlay { position: absolute; inset: 0; z-index: 30; background: #17152a; color: #fff; display: grid; place-items: center; text-align: center; padding: 24px; }
+#adOverlay .adbox { display: flex; flex-direction: column; gap: 12px; align-items: center; max-width: 360px; }
+#adOverlay .adlabel { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: #b8b2d9; font-weight: 800; }
+#adOverlay .adtitle { font-family: var(--display); font-size: 30px; }
+#adOverlay .adnote { color: #b8b2d9; font-size: 14px; font-weight: 700; }
+#adOverlay .adtimer { font-family: var(--display); font-size: 22px; font-variant-numeric: tabular-nums; }
+#mapWrap { position: relative; width: 100%; }
+#mapWrap svg { position: absolute; inset: 0; pointer-events: none; }
+.node { position: absolute; width: 62px; height: 62px; margin: -31px 0 0 -31px; border-radius: 50%; font-family: var(--display); font-weight: 700; font-size: 22px; background: #e7e4f1; color: var(--ink-soft); box-shadow: 0 5px 0 rgba(0,0,0,.12); display: grid; place-items: center; }
+.node.done { background: #06D6A0; color: #fff; }
+.node.current { background: var(--gold); color: #fff; animation: bob 1.2s ease-in-out infinite; }
+.node.hard { outline: 4px solid var(--coral); outline-offset: 2px; }
+.node.super { outline: 4px solid var(--violet); outline-offset: 2px; }
+.node:disabled { cursor: default; }
+.node .tag { position: absolute; top: -20px; font-size: 10px; font-family: var(--body); font-weight: 800; color: #fff; background: var(--coral); border-radius: 99px; padding: 1px 7px; white-space: nowrap; }
+.node.super .tag { background: var(--violet); }
+.node .st { position: absolute; bottom: -19px; font-size: 12px; color: #f0a500; letter-spacing: 1px; white-space: nowrap; }
+.world { position: absolute; left: 8px; right: 8px; text-align: center; font-family: var(--display); font-weight: 600; font-size: 15px; color: var(--violet); background: #f1edff; border-radius: 12px; padding: 4px 8px; }
+.pin { position: absolute; width: 28px; height: 28px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.2); object-fit: cover; }
+@keyframes bob { 50% { transform: translateY(-5px); } }
+.frow { display: flex; align-items: center; gap: 10px; padding: 10px 2px; border-bottom: 1px solid #ece9f5; }
+.frow img { width: 40px; height: 40px; border-radius: 50%; flex: none; }
+.frow .who { flex: 1; min-width: 0; font-weight: 800; }
+.frow .who small { display: block; color: var(--ink-soft); font-weight: 700; }
+.frow .btn { padding: 9px 14px; font-size: 15px; flex: none; }
+.empty { color: var(--ink-soft); font-weight: 700; font-size: 14px; }
+@media (prefers-reduced-motion: reduce) { .node.current, .hearts.shake { animation: none; } }
 #toast { position: absolute; left: 50%; top: 90px; transform: translateX(-50%); background: rgba(43,45,66,.9); color: #fff; padding: 10px 16px; border-radius: 16px; font-weight: 700; opacity: 0; transition: opacity .25s; pointer-events: none; max-width: 90vw; text-align: center; }
 #loading { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--display); font-size: 22px; color: var(--ink-soft); pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { .btn, .bar i { transition: none; } }
@@ -106,7 +147,7 @@ button:focus-visible { outline: 3px solid var(--violet); outline-offset: 3px; }
   <div id="loading">Building puzzle…</div>
 
   <section id="home" class="layer" hidden>
-    <div class="row"><div class="spacer"></div><div class="chip" id="coinsHome">🪙 0</div></div>
+    <div class="row"><button class="chip lives" id="livesHome" aria-label="Lives">❤ 5</button><button class="icon-btn" id="friendsBtn" aria-label="Friends" style="width:46px;height:46px;font-size:20px">👥</button><div class="spacer"></div><div class="chip" id="coinsHome">🪙 0</div></div>
     <div class="logo">
       <h1>SHAPE ESCAPE</h1>
       <div class="badge3d">3D</div>
@@ -117,7 +158,7 @@ button:focus-visible { outline: 3px solid var(--violet); outline-offset: 3px; }
       <div class="chip" id="homeLevel">Level 1 · Beginner</div>
       <button class="btn primary play" id="playBtn">PLAY</button>
       <div class="cards">
-        <button id="levelsBtn"><strong>Levels</strong><span id="levelsStat">0 / 30 solved</span></button>
+        <button id="levelsBtn"><strong>Map</strong><span id="levelsStat">0 / 30 solved</span></button>
         <button id="dailyBtn"><i class="dot" id="dailyDot"></i><strong>Daily</strong><span id="dailyStat">+50</span></button>
         <button id="collBtn"><strong>Collection</strong><span id="collStat">0 / 16 objects</span></button>
       </div>
@@ -127,7 +168,7 @@ button:focus-visible { outline: 3px solid var(--violet); outline-offset: 3px; }
   <section id="hud" class="layer" hidden>
     <div class="row">
       <button class="icon-btn" id="homeBtn" aria-label="Back to home"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 11 12 3l9 8v10h-6v-6H9v6H3z"/></svg></button>
-      <div class="title"><b id="hudLevel">Level 1</b><small id="hudTier">??? · Beginner</small></div>
+      <div class="title"><b id="hudLevel">Level 1</b><small id="hudTier">??? · Beginner</small><div class="hearts" id="hudHearts"></div></div>
       <div class="chip" id="hudLeft">12 left</div>
     </div>
     <div class="bar"><i id="hudBar"></i></div>
@@ -152,6 +193,7 @@ button:focus-visible { outline: 3px solid var(--violet); outline-offset: 3px; }
       <div class="stars" id="cStars"></div>
       <div class="coins" id="cCoins">🪙 +10</div>
       <div class="hint-txt" id="cExtra"></div>
+      <button class="btn violet" id="x2Btn" style="width:100%">▶ Watch ad · x2 coins</button>
       <button class="btn primary" id="nextBtn" style="width:100%">Continue</button>
       <button class="btn soft" id="cHomeBtn" style="width:100%">Home</button>
     </div>
@@ -165,7 +207,7 @@ button:focus-visible { outline: 3px solid var(--violet); outline-offset: 3px; }
   </section>
 
   <div id="levelsPanel" class="overlay" hidden>
-    <div class="panel"><header><h3>Levels</h3><button class="icon-btn" data-close aria-label="Close">✕</button></header><div class="body"><div class="grid" id="levelGrid"></div></div></div>
+    <div class="panel"><header><h3>Level Map</h3><button class="icon-btn" data-close aria-label="Close">✕</button></header><div class="body" id="mapBody"><div id="mapWrap"></div></div></div>
   </div>
   <div id="collPanel" class="overlay" hidden>
     <div class="panel"><header><h3>Collection</h3><button class="icon-btn" data-close aria-label="Close">✕</button></header><div class="body"><p class="hint-txt" style="margin-top:0">Solve an object once to add it here. Tap a collected object to inspect it in 3D.</p><div class="coll" id="collGrid"></div></div></div>
@@ -184,6 +226,21 @@ button:focus-visible { outline: 3px solid var(--violet); outline-offset: 3px; }
       <p class="hint-txt" style="margin:0 0 6px">One new puzzle every day, the same for every player. Solving on consecutive days grows your streak, raises the reward and makes puzzles harder. Every third day features a daily-only collectible.</p>
       <h4>History</h4><div id="dHistory"></div>
     </div></div>
+  </div>
+  <div id="friendsPanel" class="overlay" hidden>
+    <div class="panel"><header><h3>Friends</h3><button class="icon-btn" data-close aria-label="Close">✕</button></header><div class="body" id="friendsBody"></div></div>
+  </div>
+  <div id="modal" class="overlay" hidden>
+    <div class="panel modal" role="dialog" aria-modal="true" aria-labelledby="mTitle"><h3 id="mTitle"></h3><p id="mBody"></p><div id="mBtns" style="display:flex;flex-direction:column;gap:10px"></div></div>
+  </div>
+  <div id="adOverlay" hidden>
+    <div class="adbox">
+      <div class="adlabel" id="adKind">Advertisement</div>
+      <div class="adtitle">Ad placeholder</div>
+      <div class="adnote">In the Android app a real AdMob ad plays here. This web demo only shows where and when ads appear.</div>
+      <div class="adtimer" id="adTimer"></div>
+      <button class="btn primary" id="adClose" hidden>Close</button>
+    </div>
   </div>
   <div id="toast"></div>
 </div>
@@ -530,7 +587,12 @@ for (let n = 1; n <= 30; n++) {
   const mech = { locked: n >= 7 ? (n === 7 ? 1 : n < 20 ? 2 : 3) : 0, chain: n >= 11 ? (n < 20 ? 2 : 3) : 0, rotating: n >= 18 ? (n === 18 ? 1 : n < 25 ? 2 : 3) : 0 };
   mech.hidden = n >= 14 ? (n < 20 ? 3 : n < 25 ? 4 : 6) : 0;
   if (n === 11) mech.locked = 0; if (n === 14) { mech.locked = 1; mech.chain = 0; } if (n === 18) { mech.chain = 0; mech.locked = 1; mech.hidden = 0; }
-  LEVELS.push({ n, tier, objectId: OBJECTS[(n - 1) % 10].id, target: Math.round(info.min + (info.max - info.min) * (0.25 + 0.6 * t)), seed: n * 7919 + 0x5E3D, mech, diff: (n - 1) / 29,
+  // Candy-Crush-style saw-tooth: difficulty climbs through each block of 5 levels, peaks on a "Hard" level,
+  // then drops for a breather. Levels 15, 25 and 30 are "Super Hard" milestones.
+  const pos5 = (n - 1) % 5, hard = n >= 5 && pos5 === 4, superHard = n === 15 || n === 25 || n === 30;
+  const saw = n > 4 ? [-.07, -.03, .01, .05, .14][pos5] : 0;
+  const diff = Math.max(0, Math.min(1, (n - 1) / 29 * .9 + saw + (superHard ? .08 : 0)));
+  LEVELS.push({ n, tier, objectId: OBJECTS[(n - 1) % 10].id, target: Math.round(info.min + (info.max - info.min) * (0.25 + 0.6 * t)), seed: n * 7919 + 0x5E3D, mech, diff, hard, superHard,
     intro: n === 7 ? "Locked pieces sit in a grey cage. They can't move until their key piece (it glows when you tap the cage) has escaped." :
            n === 11 ? "Gold arrows are chained: when the first escapes, its partner slides out too if its path is clear." :
            n === 14 ? "Pieces showing grey diamonds hide their arrow. Rotate the object to look at a side face and the arrow appears." :
@@ -562,7 +624,12 @@ const dailyReward = streak => 50 + Math.min(10, Math.max(0, streak - 1)) * 10;
    SAVE (per-browser, optional)
    ===================================================================== */
 const SAVE_KEY = "shape-escape-3d-web";
-let save = { coins: 100, hints: 3, done: {}, objects: {}, seen: {}, daily: { last: "", streak: 0, best: 0, history: [] } };
+/* Economy (Candy Crush model): 5 lives, 1 back every 30 min; a failed or abandoned level costs a life.
+   Each level allows 3 wrong moves. 3 free hints for life; after that, 1 hint per rewarded ad (max 5/day). */
+const MAX_LIVES = 5, LIFE_REGEN_MS = 30 * 60 * 1000, MISTAKES = 3, FREE_HINTS = 3, AD_HINTS_PER_DAY = 5, AD_LIVES_PER_DAY = 5, REFILL_COST = 250;
+const INTERSTITIAL_FROM = 6, INTERSTITIAL_EVERY = 3, NO_INTERSTITIAL_AFTER_REWARDED_MS = 120000;
+let save = { coins: 100, hints: FREE_HINTS, done: {}, objects: {}, seen: {}, daily: { last: "", streak: 0, best: 0, history: [] },
+  lives: MAX_LIVES, lifeTs: 0, adDay: { date: "", hints: 0, lives: 0 }, levelsSinceAd: 0, lastRewardedAt: 0, adStats: { rewarded: 0, interstitial: 0 } };
 try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); if (s && typeof s === "object") save = Object.assign(save, s); } catch (e) {}
 function persist() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) {} }
 const nextLevel = () => { for (let n = 1; n <= 30; n++) if (!save.done[n]) return n; return 30; };
@@ -572,6 +639,18 @@ const dailyDoneToday = () => save.daily.last === todayKey();
 const currentStreak = () => (save.daily.last === todayKey() || save.daily.last === yesterdayKey()) ? save.daily.streak : 0;
 const todaysDaily = () => buildDaily(new Date(), dailyDoneToday() ? Math.max(0, save.daily.streak - 1) : currentStreak(), nextLevel());
 const specKey = sp => sp.daily ? "d" + sp.dateKey : "l" + sp.n;
+const $ = id => document.getElementById(id);
+function syncLives() {
+  if (save.lives >= MAX_LIVES) { save.lives = Math.min(save.lives, MAX_LIVES); save.lifeTs = 0; return; }
+  if (!save.lifeTs) save.lifeTs = Date.now();
+  const gained = Math.floor((Date.now() - save.lifeTs) / LIFE_REGEN_MS);
+  if (gained > 0) { save.lives = Math.min(MAX_LIVES, save.lives + gained); save.lifeTs = save.lives >= MAX_LIVES ? 0 : save.lifeTs + gained * LIFE_REGEN_MS; persist(); }
+}
+const nextLifeMs = () => { syncLives(); return save.lives >= MAX_LIVES ? 0 : Math.max(0, save.lifeTs + LIFE_REGEN_MS - Date.now()); };
+function loseLife() { syncLives(); if (save.lives >= MAX_LIVES) save.lifeTs = Date.now(); save.lives = Math.max(0, save.lives - 1); persist(); }
+function addLives(k) { syncLives(); save.lives = Math.min(MAX_LIVES, save.lives + k); if (save.lives >= MAX_LIVES) save.lifeTs = 0; persist(); }
+const fmt = ms => { const t = Math.ceil(ms / 1000); return Math.floor(t / 60) + ":" + pad2(t % 60); };
+function adQuota() { if (save.adDay.date !== todayKey()) save.adDay = { date: todayKey(), hints: 0, lives: 0 }; return save.adDay; }
 
 /* =====================================================================
    AUDIO — synthesized, starts after the first tap
@@ -764,7 +843,8 @@ function loadSpec(spec, interactive) {
       const link = new THREE.Mesh(new THREE.CylinderGeometry(.06, .06, 1, 8), new THREE.MeshStandardMaterial({ color: "#C9A227", metalness: .5, roughness: .3 }));
       root.add(link); chains.push({ a: p.id, b: t, link }); meshes.get(t).userData.arrow.material = arrowMat(ARROW.chain);
     }
-    game = { n, spec, daily: !!spec.daily, gen, state, meshes, chains, center, radius, taps: 0, blocked: 0, hints: 0, start: performance.now(), interactive, done: false };
+    game = { n, spec, daily: !!spec.daily, gen, state, meshes, chains, center, radius, taps: 0, blocked: 0, hints: 0, start: performance.now(), interactive, done: false,
+      movesLeft: !spec.daily && n <= 3 ? Infinity : MISTAKES, movesMax: MISTAKES, continued: false };
     shadowBlob.position.set(0, -radius * .95, 0); shadowBlob.scale.set(radius * 2.6, radius * 1.6, 1); shadowBlob.visible = true;
     if (mode === "home") frame(radius, 1.45, .32); else frame(radius, 1, .04);
     view.dist = view.target; resetView(); root.quaternion.copy(view.q); view.spin = interactive ? 0 : 12;
@@ -784,6 +864,9 @@ function startPlaying() {
   if (game.daily) setTip(game.gen.tpl.daily ? "Daily special: solve it to collect the " + game.gen.tpl.name + "!" : "Today's puzzle. Keep your streak going!", 3500);
   else if (game.n === 1 && !save.seen.basic) setTip("Tap a piece to slide it out along its arrow", 0);
   else if (game.spec.intro && !save.seen["intro" + game.n]) { setTip(game.spec.intro, 7000); save.seen["intro" + game.n] = 1; persist(); }
+  else if (game.spec.superHard) setTip("SUPER HARD level! Only a few pieces can move. Search every side.", 3500);
+  else if (game.spec.hard) setTip("Hard level! Look all around the object before you tap.", 3000);
+  else if (game.n === 4 && !save.seen.moves) { setTip("From now on you have 3 hearts per level. Every blocked tap costs one!", 5000); save.seen.moves = 1; persist(); }
   else setTip("");
 }
 
@@ -791,10 +874,12 @@ function refreshHud() {
   if (!game) return;
   const total = game.state.pieces.length, left = game.state.remaining;
   document.getElementById("hudLevel").textContent = game.daily ? "Daily Challenge" : "Level " + game.n;
-  document.getElementById("hudTier").textContent = "??? · " + game.spec.tier;
+  const ht = $("hudTier"); ht.textContent = (game.spec.superHard ? "SUPER HARD · " : game.spec.hard ? "HARD · " : "??? · ") + game.spec.tier;
+  ht.className = game.spec.superHard ? "supertag" : game.spec.hard ? "hardtag" : "";
+  renderHearts(false);
   document.getElementById("hudLeft").textContent = left + " left";
   document.getElementById("hudBar").style.width = (100 * (1 - left / total)) + "%";
-  document.getElementById("hintCount").textContent = save.hints > 0 ? save.hints : "+";
+  document.getElementById("hintCount").textContent = save.hints > 0 ? save.hints : "▶";
   const m = game.spec.mech, legend = [];
   if (m.locked) legend.push('<span><i style="background:#8D99AE"></i>Caged = locked</span>');
   if (m.chain) legend.push('<span><i style="background:#C9A227"></i>Gold = chained</span>');
@@ -804,6 +889,30 @@ function refreshHud() {
 }
 
 function pieceWorld(id) { return game.meshes.get(id); }
+function renderHearts(shake) {
+  const el = $("hudHearts"); if (!game) return;
+  if (!isFinite(game.movesLeft)) { el.textContent = "Practice level · no move limit"; el.style.fontSize = "12px"; return; }
+  el.style.fontSize = ""; const max = Math.max(game.movesMax, game.movesLeft);
+  el.textContent = "❤".repeat(game.movesLeft) + "♡".repeat(max - game.movesLeft);
+  if (shake) { el.classList.remove("shake"); void el.offsetWidth; el.classList.add("shake"); }
+}
+function mistake() {
+  if (!isFinite(game.movesLeft)) return;
+  game.movesLeft = Math.max(0, game.movesLeft - 1); renderHearts(true);
+  if (game.movesLeft <= 0) { game.interactive = false; setTimeout(fail, 500); }
+}
+function fail() {
+  if (!game || game.done) return;
+  clearHint(); const g = game, campaign = !g.daily, btns = [];
+  if (!g.continued) btns.push({ label: "▶ Watch ad · +2 moves & continue", cls: "violet", onClick: () => showAd("rewarded", ok => {
+    if (!ok) return fail();
+    g.continued = true; g.movesLeft = 2; g.movesMax = 2; g.interactive = true; renderHearts(); setTip("2 extra moves. Look carefully!", 2500); }) });
+  btns.push({ label: campaign ? "Try again (−1 ❤ life)" : "Try again", cls: "primary", onClick: () => {
+    if (campaign) { loseLife(); if (save.lives <= 0) { goHome(); setTimeout(livesModal, 400); return; } }
+    loadSpec(g.spec, true); } });
+  btns.push({ label: campaign ? "Give up (−1 ❤ life)" : "Home", onClick: () => { if (campaign) loseLife(); goHome(); } });
+  modal("Out of moves!", `You used all your hearts for this level.` + (campaign ? ` Trying again or leaving costs one life (you have ${save.lives}).` : ""), btns);
+}
 
 function onTap(id) {
   if (!game || !game.interactive || game.done) return;
@@ -821,8 +930,10 @@ function onTap(id) {
     game.blocked++; combo = 0; bump(g, res.dir, res.free); sfx.blocked(); buzz(20);
     setTimeout(() => { const b = pieceWorld(res.blocker); if (b) flash(b); }, 60 + 45 * res.free);
     if (!game.daily && game.n === 1 && game.blocked === 1) setTip("Blocked! Free the way first, then try again.", 2600);
+    mistake();
   } else if (res.outcome === "locked") {
     game.blocked++; shake(g); sfx.locked(); buzz(20); const key = pieceWorld(res.key); if (key) pulse(key, 900);
+    mistake();
   } else if (res.outcome === "rotated") {
     g.userData.arrow.geometry = arrowGeo(res.dir); tween(.3, k => g.userData.arrow.scale.setScalar(.4 + .6 * easeOutBack(k))); sfx.rotate();
   }
@@ -882,7 +993,7 @@ function buzz(ms) { try { navigator.vibrate && navigator.vibrate(ms); } catch (e
 /* ---------- Hints ---------- */
 function useHint() {
   if (!game || !game.interactive || game.done) return;
-  if (save.hints <= 0) { if (save.coins >= 60) { save.coins -= 60; save.hints++; toast("Bought a hint for 60 coins"); } else { toast("No hints left. Earn coins by solving levels."); return; } }
+  if (save.hints <= 0) { offerHintAd(); return; }
   const st = game.state; let best = null, bs = -1;
   for (const p of st.pieces) { if (st.removed.has(p.id) || !st.check(p).clear) continue; const s = st.blocksCount(p.id) * 10 - (pieceWorld(p.id).userData.concealed ? 3 : 0); if (s > bs) { bs = s; best = p; } }
   let rotateHint = false;
@@ -899,6 +1010,13 @@ function useHint() {
     hintLine = new THREE.Mesh(new THREE.CylinderGeometry(.07, .07, len, 10), new THREE.MeshBasicMaterial({ color: "#FFD166", transparent: true, opacity: .8 }));
     hintLine.position.copy(g.userData.home).addScaledVector(v, .55 + len / 2); hintLine.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), v); root.add(hintLine); }
   setTip(rotateHint ? "Tap the glowing piece to turn its arrow" : "Try the glowing piece", 2500);
+}
+function offerHintAd() {
+  const q = adQuota(), left = AD_HINTS_PER_DAY - q.hints;
+  if (left <= 0) { modal("No hints left today", `You've used today's ${AD_HINTS_PER_DAY} video hints. New ones tomorrow.`, [{ label: "OK", cls: "primary" }]); return; }
+  modal("Need a hint?", `Your ${FREE_HINTS} free hints are used up. Watch a short video to get 1 hint (${left} left today).`, [
+    { label: "▶ Watch ad · +1 hint", cls: "violet", onClick: () => showAd("rewarded", ok => { if (!ok) return; q.hints++; save.hints++; persist(); refreshHud(); useHint(); }) },
+    { label: "Not now" }]);
 }
 function clearHint() {
   if (hinted) { hinted.userData.pulse = false; hinted.userData.body.material = hinted.userData.pulseOld; hinted.scale.setScalar(1); hinted = null; }
@@ -928,19 +1046,21 @@ function complete() {
       const streak = currentStreak() + 1;
       d.streak = streak; d.best = Math.max(d.best, streak); d.last = today;
       coins = dailyReward(streak);
-      if (streak % 7 === 0) { save.hints += 2; bonus = 2; }
+      if (streak % 7 === 0) { coins += 100; extra = "7-day bonus +100"; }
       d.history.unshift({ date: today, obj: g.spec.objectId, secs: Math.round(secs), coins, streak });
       d.history = d.history.slice(0, 60);
-      extra = `🔥 ${streak}-day streak`;
+      extra = `🔥 ${streak}-day streak` + (extra ? " · " + extra : "");
     } else { coins = 5; extra = "Already solved today: practice reward"; }
   } else {
     firstClear = !save.done[g.n];
-    coins = firstClear ? TIERS[g.spec.tier].coins + (stars - 1) * 5 : Math.max(3, TIERS[g.spec.tier].coins / 4 | 0);
+    const mult = g.spec.superHard ? 2 : g.spec.hard ? 1.5 : 1;
+    coins = Math.round((firstClear ? TIERS[g.spec.tier].coins + (stars - 1) * 5 : Math.max(3, TIERS[g.spec.tier].coins / 4 | 0)) * mult);
+    if (mult > 1) extra = g.spec.superHard ? "Super Hard bonus x2" : "Hard level bonus x1.5";
     save.done[g.n] = Math.max(save.done[g.n] || 0, stars);
-    const solved = Object.keys(save.done).length; if (firstClear && solved % 3 === 0) { save.hints++; bonus = 1; }
+    save.levelsSinceAd++;
   }
-  save.objects[g.spec.objectId] = 1; save.coins += coins;
-  persist();
+  save.objects[g.spec.objectId] = 1; save.coins += coins; g.coinsEarned = coins;
+  persist(); publishProgress();
   setTimeout(() => {
     resetView(); setTip("");
     // 1) Reconstruction in true colours.
@@ -963,6 +1083,7 @@ function complete() {
         const nc = document.getElementById("cNew"); nc.hidden = !isNew; nc.textContent = "New in " + tpl.room + "!";
         document.getElementById("cStars").innerHTML = [0,1,2].map(i => `<span class="${i < stars ? "on" : "off"}">★</span>`).join("");
         document.getElementById("cCoins").textContent = "🪙 +" + coins;
+        $("x2Btn").hidden = false; $("x2Btn").disabled = false;
         document.getElementById("cExtra").textContent = [extra, `${Math.round(secs)}s · ${g.taps} taps`, bonus ? `+${bonus} free hint${bonus > 1 ? "s" : ""}` : "", !g.daily && g.n === 30 && firstClear ? "You solved every object!" : ""].filter(Boolean).join(" · ");
         document.getElementById("nextBtn").textContent = !g.daily && g.n < 30 ? "Next: Level " + (g.n + 1) : "Back to Home";
         mode = "complete"; show("complete");
@@ -979,6 +1100,8 @@ function show(id) { screens.forEach(s => document.getElementById(s).hidden = s !
 function updateHome() {
   const n = nextLevel(); document.getElementById("homeLevel").textContent = `Level ${n} · ${LEVELS[n - 1].tier}`;
   document.getElementById("coinsHome").textContent = "🪙 " + save.coins;
+  updateLivesChip();
+  const nl = LEVELS[n - 1]; if (nl.superHard || nl.hard) document.getElementById("homeLevel").textContent += nl.superHard ? " · SUPER HARD" : " · HARD";
   document.getElementById("levelsStat").textContent = Object.keys(save.done).length + " / 30 solved";
   document.getElementById("collStat").textContent = Object.keys(save.objects).length + " / " + OBJECTS.length + " objects";
   const done = dailyDoneToday();
@@ -994,22 +1117,39 @@ function goHome() {
   mode = "home"; if (viewerModel) { root.remove(viewerModel); viewerModel = null; } show("home");
   loadSpec(LEVELS[nextLevel() - 1], false);
 }
-function playSpec(spec) { mode = "play"; show("hud"); if (game && specKey(game.spec) === specKey(spec) && !game.interactive && !game.done) startPlaying(); else loadSpec(spec, true); }
+function playSpec(spec) {
+  if (!spec.daily) { syncLives(); if (save.lives <= 0) { livesModal(); return; } }
+  mode = "play"; show("hud"); if (game && specKey(game.spec) === specKey(spec) && !game.interactive && !game.done) startPlaying(); else loadSpec(spec, true); }
 const play = n => playSpec(LEVELS[n - 1]);
 
 document.getElementById("playBtn").onclick = () => { audio(); play(nextLevel()); };
-document.getElementById("homeBtn").onclick = goHome;
-document.getElementById("cHomeBtn").onclick = goHome;
+// Leaving a campaign level after moving costs a life (as in Candy Crush).
+function leaveLevel(then) {
+  if (game && !game.daily && !game.done && game.taps > 0 && isFinite(game.movesLeft)) {
+    modal("Leave this level?", "You'll lose a life if you quit now.", [
+      { label: "Keep playing", cls: "primary" },
+      { label: "Leave (−1 ❤ life)", onClick: () => { loseLife(); then(); } }]);
+  } else then();
+}
+function maybeInterstitial(then) {
+  if (game && !game.daily && game.n >= INTERSTITIAL_FROM && save.levelsSinceAd >= INTERSTITIAL_EVERY && Date.now() - save.lastRewardedAt > NO_INTERSTITIAL_AFTER_REWARDED_MS) {
+    save.levelsSinceAd = 0; persist(); showAd("interstitial", then);
+  } else then();
+}
+document.getElementById("homeBtn").onclick = () => leaveLevel(goHome);
+document.getElementById("cHomeBtn").onclick = () => maybeInterstitial(goHome);
+$("x2Btn").onclick = () => { if (!game || !game.coinsEarned) return; $("x2Btn").disabled = true;
+  showAd("rewarded", ok => { if (!ok) { $("x2Btn").disabled = false; return; } save.coins += game.coinsEarned; persist(); $("cCoins").textContent = "🪙 +" + game.coinsEarned * 2; $("x2Btn").hidden = true; toast("Coins doubled!"); }); };
 document.getElementById("resetBtn").onclick = resetView;
-document.getElementById("restartBtn").onclick = () => { if (game) loadSpec(game.spec, true); };
+document.getElementById("restartBtn").onclick = () => { if (game) leaveLevel(() => { syncLives(); if (!game.daily && save.lives <= 0) { goHome(); setTimeout(livesModal, 400); } else loadSpec(game.spec, true); }); };
 document.getElementById("hintBtn").onclick = useHint;
-document.getElementById("nextBtn").onclick = () => { if (!game) return; if (!game.daily && game.n < 30) play(game.n + 1); else goHome(); };
+document.getElementById("nextBtn").onclick = () => { if (!game) return; const g = game; maybeInterstitial(() => { if (!g.daily && g.n < 30) play(g.n + 1); else goHome(); }); };
 let dailyTicker = 0;
 function renderDaily() {
   const spec = todaysDaily(), tpl = OBJECTS.find(o => o.id === spec.objectId), done = dailyDoneToday();
   document.getElementById("dDate").textContent = new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
   document.getElementById("dTier").textContent = spec.tier + " · ??? mystery object";
-  document.getElementById("dReward").textContent = "🪙 +" + dailyReward(currentStreak() + 1) + ((currentStreak() + 1) % 7 === 0 && !done ? "  + 2 hints" : "");
+  document.getElementById("dReward").textContent = "🪙 +" + (dailyReward(currentStreak() + 1) + ((currentStreak() + 1) % 7 === 0 && !done ? 100 : 0));
   document.getElementById("dSpecial").textContent = tpl.daily ? (save.objects[tpl.id] ? "Daily-only collectible (already collected)" : "★ Daily-only collectible today!") : "";
   document.getElementById("dPlay").hidden = done;
   const left = new Date(); left.setHours(24, 0, 0, 0); const ms = left - new Date();
@@ -1028,13 +1168,31 @@ document.getElementById("dailyBtn").onclick = () => {
 };
 document.getElementById("dPlay").onclick = () => { document.getElementById("dailyPanel").hidden = true; audio(); playSpec(todaysDaily()); };
 document.querySelectorAll("[data-close]").forEach(b => b.onclick = () => b.closest(".overlay").hidden = true);
-document.getElementById("levelsBtn").onclick = () => {
-  const nx = nextLevel(), grid = document.getElementById("levelGrid");
-  grid.innerHTML = LEVELS.map(l => { const d = save.done[l.n], locked = l.n > nx && !d;
-    return `<button class="lvl ${d ? "done" : l.n === nx ? "next" : ""}" data-n="${l.n}" ${locked ? "disabled" : ""}>${l.n}<small>${d ? "★".repeat(d) : OBJECTS[(l.n - 1) % 10].name.split(" ")[0]}</small></button>`; }).join("");
-  grid.querySelectorAll("button").forEach(b => b.onclick = () => { document.getElementById("levelsPanel").hidden = true; audio(); play(+b.dataset.n); });
-  document.getElementById("levelsPanel").hidden = false;
-};
+const WORLDS = [[1, "World 1 · Home Sweet Home"], [11, "World 2 · Gadget Town"], [21, "World 3 · Expert Heights"]];
+function renderMap() {
+  const wrap = $("mapWrap"), body = $("mapBody"), W = wrap.clientWidth || 320, H = 104, top = 70, nx = nextLevel();
+  const pos = n => ({ x: W / 2 + Math.sin(n * .85) * W * .3, y: top + (30 - n) * H });
+  wrap.innerHTML = ""; wrap.style.height = (top * 2 + 29 * H + 40) + "px";
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg"); svg.setAttribute("width", W); svg.setAttribute("height", wrap.style.height);
+  let d = ""; for (let n = 1; n <= 30; n++) { const p = pos(n); d += (n === 1 ? "M" : "L") + p.x.toFixed(1) + " " + p.y.toFixed(1); }
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path"); path.setAttribute("d", d); path.setAttribute("fill", "none");
+  path.setAttribute("stroke", "#d9d3f3"); path.setAttribute("stroke-width", "14"); path.setAttribute("stroke-linecap", "round"); path.setAttribute("stroke-dasharray", "2 20");
+  svg.appendChild(path); wrap.appendChild(svg);
+  for (const [n, name] of WORLDS) { const w = document.createElement("div"); w.className = "world"; w.textContent = name; w.style.top = (pos(n).y + 44) + "px"; wrap.appendChild(w); }
+  for (const l of LEVELS) {
+    const p = pos(l.n), done = save.done[l.n], b = document.createElement("button");
+    b.className = "node" + (done ? " done" : l.n === nx ? " current" : "") + (l.superHard ? " super" : l.hard ? " hard" : "");
+    b.style.left = p.x + "px"; b.style.top = p.y + "px"; b.textContent = l.n; b.disabled = l.n > nx && !done;
+    b.setAttribute("aria-label", "Level " + l.n + (l.hard ? " (hard)" : ""));
+    if (l.hard || l.superHard) { const t = document.createElement("span"); t.className = "tag"; t.textContent = l.superHard ? "SUPER HARD" : "HARD"; b.appendChild(t); }
+    if (done) { const st = document.createElement("span"); st.className = "st"; st.textContent = "★".repeat(done); b.appendChild(st); }
+    b.onclick = () => { $("levelsPanel").hidden = true; audio(); play(l.n); };
+    wrap.appendChild(b);
+  }
+  placeFriendPins(pos);
+  body.scrollTop = pos(nx).y - body.clientHeight / 2;
+}
+document.getElementById("levelsBtn").onclick = () => { $("levelsPanel").hidden = false; renderMap(); };
 document.getElementById("collBtn").onclick = () => {
   const grid = document.getElementById("collGrid");
   grid.innerHTML = OBJECTS.map((o, i) => { const have = save.objects[o.id];
@@ -1043,6 +1201,136 @@ document.getElementById("collBtn").onclick = () => {
   document.getElementById("collPanel").hidden = false;
 };
 document.getElementById("viewerBack").onclick = goHome;
+
+/* ---------- Generic modal ---------- */
+let modalTicker = 0;
+function modal(title, body, buttons) {
+  const m = $("modal"); $("mTitle").textContent = title; const b = $("mBody"); clearInterval(modalTicker);
+  if (typeof body === "function") { const upd = () => b.textContent = body(); upd(); modalTicker = setInterval(() => { if (m.hidden) clearInterval(modalTicker); else upd(); }, 1000); }
+  else b.textContent = body;
+  const wrap = $("mBtns"); wrap.innerHTML = "";
+  for (const bt of buttons) { const e = document.createElement("button"); e.className = "btn " + (bt.cls || "soft"); e.textContent = bt.label; e.disabled = !!bt.disabled;
+    e.onclick = () => { m.hidden = true; clearInterval(modalTicker); if (bt.onClick) bt.onClick(); }; wrap.appendChild(e); }
+  m.hidden = false; const first = wrap.querySelector("button:not(:disabled)"); if (first) first.focus();
+}
+
+/* ---------- Ads (placeholders marking where real AdMob ads go) ---------- */
+function showAd(kind, done) {
+  const o = $("adOverlay"), btn = $("adClose"), timer = $("adTimer");
+  $("adKind").textContent = kind === "rewarded" ? "Rewarded video · optional" : "Interstitial · between levels";
+  let t = kind === "rewarded" ? 5 : 3; btn.hidden = true; o.hidden = false;
+  const tick = () => { timer.textContent = t > 0 ? (kind === "rewarded" ? "Reward in " : "Close in ") + t + "s" : (kind === "rewarded" ? "Reward earned!" : ""); };
+  tick();
+  const iv = setInterval(() => { t--; tick(); if (t <= 0) { clearInterval(iv); btn.hidden = false; btn.textContent = kind === "rewarded" ? "Claim reward" : "Continue"; btn.focus(); } }, 1000);
+  btn.onclick = () => { o.hidden = true; save.adStats[kind] = (save.adStats[kind] || 0) + 1; if (kind === "rewarded") save.lastRewardedAt = Date.now(); persist(); if (done) done(true); };
+}
+
+/* ---------- Lives ---------- */
+function livesModal() {
+  syncLives(); const q = adQuota(), full = save.lives >= MAX_LIVES, btns = [];
+  if (!full) {
+    btns.push({ label: `▶ Watch ad · +1 life (${AD_LIVES_PER_DAY - q.lives} left today)`, cls: "violet", disabled: q.lives >= AD_LIVES_PER_DAY,
+      onClick: () => showAd("rewarded", ok => { if (!ok) return; q.lives++; addLives(1); updateHome(); toast("+1 life"); }) });
+    btns.push({ label: "👥 Ask friends for lives", disabled: !fx.ready, onClick: () => { askAllFriends(); openFriends(); } });
+    btns.push({ label: `Refill all lives · ${REFILL_COST} 🪙`, disabled: save.coins < REFILL_COST, onClick: () => { save.coins -= REFILL_COST; addLives(MAX_LIVES); updateHome(); toast("Lives refilled!"); } });
+  }
+  btns.push({ label: full ? "OK" : "Wait", cls: full ? "primary" : "soft" });
+  modal(full ? "Lives full ❤ 5/5" : save.lives === 0 ? "Out of lives" : `Lives ❤ ${save.lives}/${MAX_LIVES}`,
+    () => full ? "You lose a life when you fail a level or leave it after moving. A lost life comes back every 30 minutes."
+               : `Next life in ${fmt(nextLifeMs())}. Lives come back 1 every 30 minutes (max ${MAX_LIVES}).`, btns);
+}
+$("livesHome").onclick = livesModal;
+function updateLivesChip() {
+  syncLives(); const el = $("livesHome"); el.textContent = "";
+  const b = document.createElement("b"); b.textContent = "❤ " + save.lives; el.appendChild(b);
+  el.appendChild(document.createTextNode(save.lives >= MAX_LIVES ? " Full" : " " + fmt(nextLifeMs())));
+}
+setInterval(() => { if (mode === "home") updateLivesChip(); }, 1000);
+
+/* ---------- Friends: real players who share this page (db capability) ---------- */
+const fx = { ready: false, db: null, user: null, me: null, players: new Map(), claimed: {}, published: false, writing: false };
+async function initFriends() {
+  try {
+    if (!window.claude || !window.claude.use) return;
+    const [db, user] = await Promise.all([window.claude.use("db"), window.claude.use("user")]);
+    if (!db || !user) return;
+    const me = await user.id(); if (!me) return;
+    Object.assign(fx, { db, user, me });
+    const st = await db.doc("data/users/" + me + "/state").get().catch(() => null);
+    if (st && st.exists) fx.claimed = Object.assign({}, st.data().claimed || {});
+    db.collection("players").onSnapshot(snap => {
+      fx.players = new Map(snap.docs.map(d => [d.id, d.data()])); fx.ready = true;
+      if (!fx.published) { fx.published = true; setTimeout(publishProgress, 0); }
+      if (!$("friendsPanel").hidden) renderFriends();
+      if (!$("levelsPanel").hidden) renderMap();
+    }, () => { fx.ready = false; });
+  } catch (e) { /* friends stay unavailable; the game works alone */ }
+}
+async function publishProgress() {
+  if (!fx.db || fx.writing) return;
+  const mine = fx.players.get(fx.me), level = nextLevel(), stars = Object.values(save.done).reduce((a, b) => a + b, 0);
+  if (mine && mine.level === level && mine.stars === stars) return;
+  fx.writing = true;
+  try { const ref = fx.db.doc("players/" + fx.me); if (mine) await ref.update({ level, stars }); else await ref.set({ level, stars, gifts: {}, asks: {} }); }
+  catch (e) { /* view-only viewers cannot write; they can still play */ }
+  fx.writing = false;
+}
+async function ensureMyDoc() { if (!fx.players.get(fx.me)) { fx.published = true; await publishProgress(); } }
+async function sendLife(id) {
+  try { await ensureMyDoc(); await fx.db.doc("players/" + fx.me).update({ gifts: { [id]: todayKey() } }); toast("Life sent ❤"); }
+  catch (e) { toast("Couldn't send. You need Contributor access to this game page."); }
+}
+async function askAllFriends() {
+  const ids = [...fx.players.keys()].filter(id => id !== fx.me); if (!ids.length) { toast("No friends here yet. Share this game page with them."); return; }
+  try { await ensureMyDoc(); const asks = {}; ids.forEach(id => asks[id] = todayKey()); await fx.db.doc("players/" + fx.me).update({ asks }); toast("Asked " + ids.length + " friend" + (ids.length > 1 ? "s" : "") + " for lives"); }
+  catch (e) { toast("Couldn't ask. You need Contributor access to this game page."); }
+}
+async function acceptLife(senderId, date) {
+  syncLives(); if (save.lives >= MAX_LIVES) { toast("Your lives are already full"); return; }
+  fx.claimed[senderId + "|" + date] = 1; addLives(1); updateHome();
+  try { await fx.db.doc("data/users/" + fx.me + "/state").set({ claimed: fx.claimed }); } catch (e) {}
+  toast("+1 life from a friend"); renderFriends();
+}
+function openFriends() { $("friendsPanel").hidden = false; renderFriends(); }
+$("friendsBtn").onclick = openFriends;
+async function renderFriends() {
+  const body = $("friendsBody"); body.innerHTML = "";
+  const note = (t) => { const p = document.createElement("p"); p.className = "empty"; p.textContent = t; body.appendChild(p); };
+  if (!fx.ready) { note("Friends appear here when you're signed in and this game page is shared with them (Share menu → Contributor). Everyone who opens it shows up as a friend you can send lives to. In the Android app this connects to Facebook or Google Play Games friends."); return; }
+  const others = [...fx.players.entries()].filter(([id]) => id !== fx.me), today = todayKey(), mine = fx.players.get(fx.me) || {};
+  const ps = await fx.user.profiles(others.map(([id]) => id));
+  const row = (id, sub, btnLabel, onClick, disabled) => {
+    const r = document.createElement("div"); r.className = "frow";
+    const img = document.createElement("img"); img.alt = ""; img.src = ps[id] ? ps[id].avatarUrl : ""; r.appendChild(img);
+    const who = document.createElement("div"); who.className = "who"; who.textContent = (ps[id] && ps[id].name) || "Player";
+    const small = document.createElement("small"); small.textContent = sub; who.appendChild(small); r.appendChild(who);
+    if (btnLabel) { const b = document.createElement("button"); b.className = "btn " + (disabled ? "soft" : "primary"); b.textContent = btnLabel; b.disabled = !!disabled; b.onclick = onClick; r.appendChild(b); }
+    body.appendChild(r);
+  };
+  const h = t => { const e = document.createElement("h4"); e.textContent = t; body.appendChild(e); };
+  const gifts = others.filter(([id, d]) => d.gifts && d.gifts[fx.me] && !fx.claimed[id + "|" + d.gifts[fx.me]]);
+  const asks = others.filter(([id, d]) => d.asks && d.asks[fx.me] === today && (mine.gifts || {})[id] !== today);
+  syncLives(); const ask = document.createElement("button"); ask.className = "btn violet"; ask.style.width = "100%"; ask.textContent = `Ask all friends for lives (you have ❤ ${save.lives}/${MAX_LIVES})`;
+  ask.onclick = askAllFriends; body.appendChild(ask);
+  if (gifts.length) { h("Lives for you"); gifts.forEach(([id, d]) => row(id, "Sent you a life", "Accept", () => acceptLife(id, d.gifts[fx.me]))); }
+  if (asks.length) { h("Friends asking for help"); asks.forEach(([id]) => row(id, "Asked you for a life", "Send ❤", () => sendLife(id))); }
+  h("Friends");
+  if (!others.length) note("No other players yet. Share this game page with friends (Share menu → Contributor) and they'll appear here.");
+  others.sort((a, b) => (b[1].level || 0) - (a[1].level || 0)).forEach(([id, d]) => {
+    const sent = (mine.gifts || {})[id] === today;
+    row(id, `Level ${d.level || 1} · ${d.stars || 0} ★`, sent ? "Sent ✓" : "Send ❤", () => sendLife(id), sent);
+  });
+}
+async function placeFriendPins(pos) {
+  if (!fx.ready) return; const wrap = $("mapWrap");
+  const others = [...fx.players.entries()].filter(([id]) => id !== fx.me); if (!others.length) return;
+  const ps = await fx.user.profiles(others.map(([id]) => id));
+  const byLevel = {};
+  for (const [id, d] of others) { const lv = Math.min(30, Math.max(1, d.level || 1)), k = byLevel[lv] = (byLevel[lv] || 0) + 1, p = pos(lv);
+    const img = document.createElement("img"); img.className = "pin"; img.alt = (ps[id] && ps[id].name) || "Friend"; img.title = img.alt; img.src = ps[id].avatarUrl;
+    img.style.left = (p.x + 26 + (k - 1) * 14) + "px"; img.style.top = (p.y - 44) + "px"; wrap.appendChild(img); }
+}
+initFriends();
 function openViewer(id) {
   const tpl = OBJECTS.find(o => o.id === id); clearBoard(); mode = "viewer";
   const model = buildModel(tpl), { mn, mx } = solidBounds(tpl), size = Math.max(mx[1] - mn[1], Math.max(mx[0] - mn[0], mx[2] - mn[2]) * .8), s = 2.4 / size;
