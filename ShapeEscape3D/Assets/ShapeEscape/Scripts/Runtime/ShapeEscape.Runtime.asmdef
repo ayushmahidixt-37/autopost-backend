@@ -1,0 +1,23 @@
+{
+    "name": "ShapeEscape.Runtime",
+    "rootNamespace": "ShapeEscape",
+    "references": [
+        "ShapeEscape.Core",
+        "Unity.InputSystem"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [
+        {
+            "name": "com.unity.inputsystem",
+            "expression": "1.0.0",
+            "define": "SE_INPUT_SYSTEM_PACKAGE"
+        }
+    ],
+    "noEngineReferences": false
+}

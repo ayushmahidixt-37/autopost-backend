@@ -1,0 +1,19 @@
+{
+    "name": "ShapeEscape.Editor",
+    "rootNamespace": "ShapeEscape.EditorTools",
+    "references": [
+        "ShapeEscape.Core",
+        "ShapeEscape.Runtime"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
