@@ -382,11 +382,11 @@ function fitToCount(t, min, max, target) {
 
 /* ---------- Tiers & rules ---------- */
 const TIERS = {
-  Beginner: { min: 8, max: 15, lmin: 2, lmax: 4, bias: .25, frac: .8, coins: 10 },
-  Easy: { min: 15, max: 25, lmin: 3, lmax: 6, bias: .4, frac: .6, coins: 15 },
-  Medium: { min: 25, max: 45, lmin: 4, lmax: 9, bias: .55, frac: .45, coins: 20 },
-  Hard: { min: 45, max: 70, lmin: 5, lmax: 13, bias: .7, frac: .38, coins: 30 },
-  Expert: { min: 70, max: 120, lmin: 6, lmax: 18, bias: .8, frac: .32, coins: 40 },
+  Beginner: { min: 8, max: 15, lmin: 2, lmax: 5, bias: .25, frac: .8, coins: 10 },
+  Easy: { min: 15, max: 25, lmin: 3, lmax: 9, bias: .4, frac: .6, coins: 15 },
+  Medium: { min: 25, max: 45, lmin: 5, lmax: 14, bias: .6, frac: .45, coins: 20 },
+  Hard: { min: 45, max: 70, lmin: 7, lmax: 22, bias: .75, frac: .38, coins: 30 },
+  Expert: { min: 70, max: 120, lmin: 9, lmax: 32, bias: .85, frac: .32, coins: 40 },
 };
 const ckey = (x, y, z) => (x + 64) * 16384 + (y + 64) * 128 + (z + 64);
 
@@ -454,7 +454,7 @@ function generate(spec) {
   let best = null, bestScore = 1e9;
   for (let attempt = 0; attempt < 8; attempt++) {
     const r = mulberry(spec.seed * 31 + attempt * 7919);
-    const pieces = build(vox, tier, r, spec.mech);
+    const pieces = build(vox, tier, r, spec.mech, spec.diff == null ? .5 : spec.diff);
     const v = validate(pieces); if (!v.ok) continue;
     const sc = (v.layers < tier.lmin ? tier.lmin - v.layers : 0) + (v.layers > tier.lmax ? v.layers - tier.lmax : 0);
     if (sc < bestScore) { bestScore = sc; best = { pieces, v }; } if (!sc) break;
@@ -462,7 +462,7 @@ function generate(spec) {
   return { tpl, vox, pieces: best.pieces, validation: best.v };
 }
 
-function build(vox, tier, r, mech) {
+function build(vox, tier, r, mech, diff) {
   const cells = vox.cells, n = cells.length, rem = new Array(n).fill(true), dirs = new Array(n), order = [];
   const grid = new Map(cells.map((c, i) => [ckey(c.x, c.y, c.z), i]));
   const mx = [0,1,2].map(i => Math.max(...cells.map(c => [c.x,c.y,c.z][i])));
@@ -482,12 +482,24 @@ function build(vox, tier, r, mech) {
     dirs[pick] = choice; order.push(pick); rem[pick] = false;
   }
   const pieces = cells.map((c, i) => ({ id: i, x: c.x, y: c.y, z: c.z, dir: dirs[i], pal: c.pal, lock: -1, chain: [], cycle: null, hidden: false }));
-  // Hardening: re-point initially-free pieces into others while it stays solvable.
-  const st = new PuzzleState(pieces), goal = Math.ceil(n * tier.frac);
+  // Difficulty pass 1: re-point pieces that are free at the start into other pieces (while still solvable),
+  // so fewer moves are available up front. The allowed share shrinks as levels get harder (diff 0..1).
+  const st = new PuzzleState(pieces), goal = Math.ceil(n * tier.frac * (1 - .55 * diff));
   const free = shuffle(pieces.filter(p => st.sweep(p, p.dir).clear), r); let fc = free.length;
   const fastOk = () => validate(pieces).ok;
   for (const p of free) { if (fc <= goal) break; const old = p.dir;
     for (const d of shuffle([0,1,2,3,4,5], r)) { if (d === old || st.sweep(p, d).clear) continue; p.dir = d; if (fastOk()) { fc--; break; } p.dir = old; } }
+  // Difficulty pass 2: point more arrows *through* other pieces, creating longer dependency chains, so at every
+  // step only a few pieces can move and players have to search the object for them.
+  const blockersOn = (p, d) => { const v = DIRS[d]; let x = p.x, y = p.y, z = p.z, c = 0;
+    for (;;) { x += v[0]; y += v[1]; z += v[2]; if (x < st.mn[0] || y < st.mn[1] || z < st.mn[2] || x > st.mx[0] || y > st.mx[1] || z > st.mx[2]) return c; if (st.occ.has(ckey(x, y, z))) c++; } };
+  let budget = Math.round(n * 1.4 * diff * diff);
+  for (const p of shuffle(pieces.slice(), r)) {
+    if (budget-- <= 0) break;
+    const old = p.dir, cur = blockersOn(p, old);
+    const opts = [0,1,2,3,4,5].filter(d => d !== old).map(d => [d, blockersOn(p, d)]).filter(o => o[1] > cur).sort((a, b) => b[1] - a[1]);
+    for (const [d] of opts) { p.dir = d; if (fastOk()) break; p.dir = old; }
+  }
   const sol = validate(pieces).order, rank = new Array(n); sol.forEach((id, k) => rank[id] = k);
   // Special arrows layered on the known solution order (they can never break solvability).
   const special = new Array(n).fill(false);
@@ -516,9 +528,9 @@ const LEVELS = [];
 for (let n = 1; n <= 30; n++) {
   const tier = tierFor(n), info = TIERS[tier], [f, l] = TIER_RANGE[tier], t = l > f ? (n - f) / (l - f) : .5;
   const mech = { locked: n >= 7 ? (n === 7 ? 1 : n < 20 ? 2 : 3) : 0, chain: n >= 11 ? (n < 20 ? 2 : 3) : 0, rotating: n >= 18 ? (n === 18 ? 1 : n < 25 ? 2 : 3) : 0 };
-  mech.hidden = n >= 14 ? (n < 25 ? 2 : 4) : 0;
+  mech.hidden = n >= 14 ? (n < 20 ? 3 : n < 25 ? 4 : 6) : 0;
   if (n === 11) mech.locked = 0; if (n === 14) { mech.locked = 1; mech.chain = 0; } if (n === 18) { mech.chain = 0; mech.locked = 1; mech.hidden = 0; }
-  LEVELS.push({ n, tier, objectId: OBJECTS[(n - 1) % 10].id, target: Math.round(info.min + (info.max - info.min) * (0.25 + 0.6 * t)), seed: n * 7919 + 0x5E3D, mech,
+  LEVELS.push({ n, tier, objectId: OBJECTS[(n - 1) % 10].id, target: Math.round(info.min + (info.max - info.min) * (0.25 + 0.6 * t)), seed: n * 7919 + 0x5E3D, mech, diff: (n - 1) / 29,
     intro: n === 7 ? "Locked pieces sit in a grey cage. They can't move until their key piece (it glows when you tap the cage) has escaped." :
            n === 11 ? "Gold arrows are chained: when the first escapes, its partner slides out too if its path is clear." :
            n === 14 ? "Pieces showing grey diamonds hide their arrow. Rotate the object to look at a side face and the arrow appears." :
@@ -542,7 +554,7 @@ function buildDaily(date, streak, highest) {
   if (highest < 5) tv = Math.min(tv, 1);
   const tier = TIER_NAMES[Math.min(4, tv)], info = TIERS[tier];
   const objectId = dayIndex % 3 === 0 ? DAILY_IDS[Math.floor(dayIndex / 3) % DAILY_IDS.length] : CAMPAIGN_IDS[seed % CAMPAIGN_IDS.length];
-  return { n: 0, daily: true, dateKey: key, tier, objectId, target: Math.round((info.min + info.max) / 2), seed: seed % 1000003 + 17, mech: mechUnlocked(highest, tier), intro: null };
+  return { n: 0, daily: true, dateKey: key, tier, objectId, target: Math.round((info.min + info.max) / 2), seed: seed % 1000003 + 17, mech: mechUnlocked(highest, tier), diff: { Beginner: .1, Easy: .3, Medium: .55, Hard: .75, Expert: .92 }[tier], intro: null };
 }
 const dailyReward = streak => 50 + Math.min(10, Math.max(0, streak - 1)) * 10;
 
